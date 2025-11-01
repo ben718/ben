@@ -22,6 +22,13 @@ moteur :
 python -m webapp --catalogue /chemin/vers/catalogue.json
 ```
 
+Pour produire un export statique de la page d'accueil (idéal pour GitHub Pages ou
+une revue rapide sans serveur Python) :
+
+```bash
+python -m webapp --export-static docs/index.html
+```
+
 Vous pouvez ensuite visiter <http://localhost:8000> pour voir le site et
 utiliser le configurateur. Le moteur Python situé derrière `/api/generate`
 alimente la synthèse affichée à l'écran, et l'endpoint `/api/download`
@@ -31,14 +38,17 @@ retourne une archive ZIP contenant les livrables.
 
 Pour partager rapidement la maquette directement depuis Git :
 
-1. Poussez votre code sur GitHub.
-2. Dans le dépôt, ouvrez **Settings → Pages**.
-3. Dans la section **Source**, choisissez la branche **`main`** ou **`docs`**,
+1. Générez la page statique avec `python -m webapp --export-static docs/index.html`.
+2. Validez et poussez vos changements sur GitHub.
+3. Dans le dépôt, ouvrez **Settings → Pages**.
+4. Dans la section **Source**, choisissez la branche **`main`** ou **`docs`**,
    puis validez.
 
 GitHub Pages déploiera automatiquement le site sur une URL publique en quelques
 instants, ce qui vous permet de tester la démo sans configuration
-supplémentaire.
+supplémentaire. Sur cette version statique, les appels `/api/generate` et
+`/api/download` renverront une erreur contrôlée (puisque le backend Python n'est
+pas disponible), mais l'interface reste entièrement navigable pour la démo.
 
 La page d'accueil affiche automatiquement la branche et le dernier commit
 Git détectés, ainsi qu'une courte liste des derniers commits disponibles pour

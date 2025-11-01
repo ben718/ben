@@ -1,46 +1,8 @@
-"""A tiny WSGI application that serves a functional HTML page.
-
-The goal of this module is to keep the application completely
-dependency-free so that it can run in minimal environments while still
-providing a pleasant, working landing page for the project.
-"""
-from __future__ import annotations
-
-import html
-import json
-import os
-from argparse import ArgumentParser
-from pathlib import Path
-from subprocess import CalledProcessError, run
-from typing import Any, Callable, Iterable, List, Tuple
-from wsgiref.simple_server import make_server
-
-if __package__:
-    from .omadabom_engine import build_archive, generate_plan, set_catalogue_path
-else:  # pragma: no cover - execution via ``python src/webapp.py``
-    import sys
-    from pathlib import Path
-
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from src.omadabom_engine import (  # type: ignore
-        build_archive,
-        generate_plan,
-        set_catalogue_path,
-    )
-
-StartResponse = Callable[[str, List[Tuple[str, str]]], None]
-WSGIApplication = Callable[[dict, StartResponse], Iterable[bytes]]
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-
-GIT_PLACEHOLDER = "{{GIT_METADATA}}"
-GIT_HISTORY_PLACEHOLDER = "{{GIT_HISTORY}}"
-
-HTML_TEMPLATE = """<!DOCTYPE html>
-<html lang=\"fr\">
+<!DOCTYPE html>
+<html lang="fr">
   <head>
-    <meta charset=\"utf-8\" />
-    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>OmadaBOM – configurez un réseau précis</title>
     <style>
       :root {
@@ -545,352 +507,352 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   </head>
   <body>
     <main>
-      <header class=\"hero\">
+      <header class="hero">
         <div>
-          <p class=\"pill\">Maquette fonctionnelle</p>
+          <p class="pill">Maquette fonctionnelle</p>
           <h1>OmadaBOM – configurez un réseau précis, simplement</h1>
           <p>Découvrez le parcours hybride Simple/Avancé d'OmadaBOM pour traduire vos besoins en une configuration réseau professionnelle, entièrement personnalisable.</p>
         </div>
-        <div class=\"git-info\">{{GIT_METADATA}}</div>
-        <div class=\"pages-hint\">
+        <div class="git-info">Version Git : <code>work</code> @ <code>99deec5</code></div>
+        <div class="pages-hint">
           <strong>Tester depuis GitHub Pages</strong>
-          <p style=\"margin:0;\">Dans GitHub, ouvrez <em>Settings → Pages</em> puis, dans la section <em>Source</em>, sélectionnez la branche <code>main</code> ou <code>docs</code>. Validez pour publier automatiquement cette démo.</p>
+          <p style="margin:0;">Dans GitHub, ouvrez <em>Settings → Pages</em> puis, dans la section <em>Source</em>, sélectionnez la branche <code>main</code> ou <code>docs</code>. Validez pour publier automatiquement cette démo.</p>
         </div>
-        {{GIT_HISTORY}}
+        <section class="git-history"><h3>Commits récents</h3><ul><li><code>99deec5</code> – Ajoute des consignes GitHub Pages pour la démo</li><li><code>cafc4ec</code> – Initial commit</li></ul></section>
       </header>
 
-      <div class=\"progress\">
-        <div class=\"progress-bar\">
-          <div class=\"progress-fill\" id=\"progressFill\"></div>
+      <div class="progress">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
         </div>
-        <span id=\"progressLabel\">Étape 1 sur 4</span>
+        <span id="progressLabel">Étape 1 sur 4</span>
       </div>
 
-      <section class=\"step active\" data-step=\"1\">
+      <section class="step active" data-step="1">
         <h2>Étape 1 · Décrivez votre environnement</h2>
-        <p class=\"description\">Commencez par une estimation rapide, puis affinez avec des détails structurels si nécessaire.</p>
-        <div class=\"field\">
-          <label for=\"surfaceInput\">Surface totale à couvrir (m²)</label>
-          <input id=\"surfaceInput\" type=\"number\" min=\"1\" value=\"300\" />
+        <p class="description">Commencez par une estimation rapide, puis affinez avec des détails structurels si nécessaire.</p>
+        <div class="field">
+          <label for="surfaceInput">Surface totale à couvrir (m²)</label>
+          <input id="surfaceInput" type="number" min="1" value="300" />
         </div>
 
-        <div class=\"field\">
+        <div class="field">
           <label>Type d'environnement principal</label>
-          <div class=\"grid two\">
-            <label class=\"option-card\">
-              <input type=\"radio\" name=\"environment\" value=\"bureau\" checked />
-              <div class=\"card-bg\"></div>
+          <div class="grid two">
+            <label class="option-card">
+              <input type="radio" name="environment" value="bureau" checked />
+              <div class="card-bg"></div>
               <span>🏢 Bureau</span>
               <small>Open-space, salles de réunion, bureaux cloisonnés.</small>
             </label>
-            <label class=\"option-card\">
-              <input type=\"radio\" name=\"environment\" value=\"maison\" />
-              <div class=\"card-bg\"></div>
+            <label class="option-card">
+              <input type="radio" name="environment" value="maison" />
+              <div class="card-bg"></div>
               <span>🏠 Maison</span>
               <small>Résidences, villas, appartements spacieux.</small>
             </label>
-            <label class=\"option-card\">
-              <input type=\"radio\" name=\"environment\" value=\"entrepot\" />
-              <div class=\"card-bg\"></div>
+            <label class="option-card">
+              <input type="radio" name="environment" value="entrepot" />
+              <div class="card-bg"></div>
               <span>🏭 Entrepôt</span>
               <small>Logistique, ateliers, hangars industriels.</small>
             </label>
-            <label class=\"option-card\">
-              <input type=\"radio\" name=\"environment\" value=\"hotel\" />
-              <div class=\"card-bg\"></div>
+            <label class="option-card">
+              <input type="radio" name="environment" value="hotel" />
+              <div class="card-bg"></div>
               <span>🏨 Hôtel</span>
               <small>Chambres, couloirs, espaces communs multiples.</small>
             </label>
-            <label class=\"option-card\">
-              <input type=\"radio\" name=\"environment\" value=\"exterieur\" />
-              <div class=\"card-bg\"></div>
+            <label class="option-card">
+              <input type="radio" name="environment" value="exterieur" />
+              <div class="card-bg"></div>
               <span>🌳 Extérieur</span>
               <small>Campus, parkings, jardins, zones urbaines.</small>
             </label>
           </div>
         </div>
 
-        <div class=\"field\">
+        <div class="field">
           <label>Densité d'appareils attendue</label>
-          <div class=\"inline-options\">
+          <div class="inline-options">
             <label>
-              <input type=\"radio\" name=\"density\" value=\"faible\" />
+              <input type="radio" name="density" value="faible" />
               <span>Faible</span>
             </label>
             <label>
-              <input type=\"radio\" name=\"density\" value=\"moyenne\" checked />
+              <input type="radio" name="density" value="moyenne" checked />
               <span>Moyenne</span>
             </label>
             <label>
-              <input type=\"radio\" name=\"density\" value=\"elevee\" />
+              <input type="radio" name="density" value="elevee" />
               <span>Élevée</span>
             </label>
           </div>
         </div>
 
-        <button class=\"toggle-advanced\" type=\"button\" data-advanced-target=\"advanced-step1\">Afficher les options avancées</button>
-        <div class=\"advanced hidden\" id=\"advanced-step1\">
-          <div class=\"field\">
+        <button class="toggle-advanced" type="button" data-advanced-target="advanced-step1">Afficher les options avancées</button>
+        <div class="advanced hidden" id="advanced-step1">
+          <div class="field">
             <label>Structure du bâtiment</label>
-            <div class=\"inline-options\">
+            <div class="inline-options">
               <label>
-                <input type=\"radio\" name=\"structure\" value=\"cloisons\" checked />
+                <input type="radio" name="structure" value="cloisons" checked />
                 <span>Cloisons légères</span>
               </label>
               <label>
-                <input type=\"radio\" name=\"structure\" value=\"murs\" />
+                <input type="radio" name="structure" value="murs" />
                 <span>Murs porteurs</span>
               </label>
               <label>
-                <input type=\"radio\" name=\"structure\" value=\"metal\" />
+                <input type="radio" name="structure" value="metal" />
                 <span>Structure métallique</span>
               </label>
             </div>
           </div>
 
-          <div class=\"field\">
+          <div class="field">
             <label>Hauteur sous plafond</label>
-            <div class=\"inline-options\">
+            <div class="inline-options">
               <label>
-                <input type=\"radio\" name=\"height\" value=\"standard\" checked />
+                <input type="radio" name="height" value="standard" checked />
                 <span>Standard &lt; 3m</span>
               </label>
               <label>
-                <input type=\"radio\" name=\"height\" value=\"elevee\" />
+                <input type="radio" name="height" value="elevee" />
                 <span>Élevée 3-5m</span>
               </label>
               <label>
-                <input type=\"radio\" name=\"height\" value=\"tres\" />
+                <input type="radio" name="height" value="tres" />
                 <span>Très élevée &gt; 5m</span>
               </label>
             </div>
           </div>
 
-          <div class=\"field\">
+          <div class="field">
             <label>Décomposez par zones (optionnel)</label>
-            <div class=\"grid two\">
-              <div class=\"field\">
-                <label for=\"zoneNameInput\">Nom de la zone</label>
-                <input id=\"zoneNameInput\" type=\"text\" placeholder=\"Ex : Open-space\" />
+            <div class="grid two">
+              <div class="field">
+                <label for="zoneNameInput">Nom de la zone</label>
+                <input id="zoneNameInput" type="text" placeholder="Ex : Open-space" />
               </div>
-              <div class=\"field\">
-                <label for=\"zoneSurfaceInput\">Surface (m²)</label>
-                <input id=\"zoneSurfaceInput\" type=\"number\" min=\"1\" />
+              <div class="field">
+                <label for="zoneSurfaceInput">Surface (m²)</label>
+                <input id="zoneSurfaceInput" type="number" min="1" />
               </div>
-              <div class=\"field\">
-                <label for=\"zoneEnvironmentSelect\">Type d'environnement</label>
-                <select id=\"zoneEnvironmentSelect\">
-                  <option value=\"bureau\">Bureau</option>
-                  <option value=\"maison\">Maison</option>
-                  <option value=\"entrepot\">Entrepôt</option>
-                  <option value=\"hotel\">Hôtel</option>
-                  <option value=\"exterieur\">Extérieur</option>
+              <div class="field">
+                <label for="zoneEnvironmentSelect">Type d'environnement</label>
+                <select id="zoneEnvironmentSelect">
+                  <option value="bureau">Bureau</option>
+                  <option value="maison">Maison</option>
+                  <option value="entrepot">Entrepôt</option>
+                  <option value="hotel">Hôtel</option>
+                  <option value="exterieur">Extérieur</option>
                 </select>
               </div>
-              <div class=\"field\">
-                <label for=\"zoneDensitySelect\">Densité</label>
-                <select id=\"zoneDensitySelect\">
-                  <option value=\"faible\">Faible</option>
-                  <option value=\"moyenne\" selected>Moyenne</option>
-                  <option value=\"elevee\">Élevée</option>
+              <div class="field">
+                <label for="zoneDensitySelect">Densité</label>
+                <select id="zoneDensitySelect">
+                  <option value="faible">Faible</option>
+                  <option value="moyenne" selected>Moyenne</option>
+                  <option value="elevee">Élevée</option>
                 </select>
               </div>
             </div>
-            <button type=\"button\" id=\"addZoneButton\" class=\"toggle-advanced\">+ Ajouter cette zone</button>
-            <ul class=\"zones-list\" id=\"zoneList\"></ul>
+            <button type="button" id="addZoneButton" class="toggle-advanced">+ Ajouter cette zone</button>
+            <ul class="zones-list" id="zoneList"></ul>
           </div>
         </div>
       </section>
 
-      <section class=\"step\" data-step=\"2\">
+      <section class="step" data-step="2">
         <h2>Étape 2 · Choisissez vos services</h2>
-        <p class=\"description\">Sélectionnez les usages clés pour adapter automatiquement la sécurité et la performance.</p>
-        <div class=\"grid\">
-          <label class=\"option-card\">
-            <input type=\"checkbox\" data-service=\"invites\" checked />
-            <div class=\"card-bg\"></div>
+        <p class="description">Sélectionnez les usages clés pour adapter automatiquement la sécurité et la performance.</p>
+        <div class="grid">
+          <label class="option-card">
+            <input type="checkbox" data-service="invites" checked />
+            <div class="card-bg"></div>
             <span>Réseau invités</span>
             <small>Wi-Fi isolé pour visiteurs et collaborateurs temporaires.</small>
           </label>
-          <label class=\"option-card\">
-            <input type=\"checkbox\" data-service=\"voip\" />
-            <div class=\"card-bg\"></div>
+          <label class="option-card">
+            <input type="checkbox" data-service="voip" />
+            <div class="card-bg"></div>
             <span>Téléphonie sur IP (VoIP)</span>
             <small>Appels voix haute priorité et stabilité assurée.</small>
           </label>
-          <label class=\"option-card\">
-            <input type=\"checkbox\" data-service=\"iot\" />
-            <div class=\"card-bg\"></div>
+          <label class="option-card">
+            <input type="checkbox" data-service="iot" />
+            <div class="card-bg"></div>
             <span>Objets connectés (IoT)</span>
             <small>Segmentation automatique des capteurs et équipements.</small>
           </label>
-          <label class=\"option-card\">
-            <input type=\"checkbox\" data-service=\"haute_vitesse\" />
-            <div class=\"card-bg\"></div>
+          <label class="option-card">
+            <input type="checkbox" data-service="haute_vitesse" />
+            <div class="card-bg"></div>
             <span>Connexion &gt; 1 Gbit/s</span>
             <small>Optimise pour la fibre multi-gigabit et le Wi-Fi 6/7.</small>
           </label>
         </div>
 
-        <button class=\"toggle-advanced\" type=\"button\" data-advanced-target=\"advanced-step2\">Afficher les options avancées</button>
-        <div class=\"advanced hidden\" id=\"advanced-step2\">
-          <div class=\"field\">
+        <button class="toggle-advanced" type="button" data-advanced-target="advanced-step2">Afficher les options avancées</button>
+        <div class="advanced hidden" id="advanced-step2">
+          <div class="field">
             <label>Hiérarchisation du trafic (QoS)</label>
-            <div class=\"qos-list\" id=\"qosList\"></div>
+            <div class="qos-list" id="qosList"></div>
           </div>
-          <div class=\"field\">
+          <div class="field">
             <label>Exigences de sécurité spécifiques</label>
-            <div class=\"grid two\">
-              <label class=\"option-card\">
-                <input type=\"checkbox\" data-security=\"isolation\" checked />
-                <div class=\"card-bg\"></div>
+            <div class="grid two">
+              <label class="option-card">
+                <input type="checkbox" data-security="isolation" checked />
+                <div class="card-bg"></div>
                 <span>Isolation stricte des clients</span>
                 <small>Aucun appareil invité ne peut voir un autre appareil.</small>
               </label>
-              <label class=\"option-card\">
-                <input type=\"checkbox\" data-security=\"filtrage\" />
-                <div class=\"card-bg\"></div>
+              <label class="option-card">
+                <input type="checkbox" data-security="filtrage" />
+                <div class="card-bg"></div>
                 <span>Filtrage MAC</span>
                 <small>Autoriser uniquement les équipements pré-enregistrés.</small>
               </label>
-              <label class=\"option-card\">
-                <input type=\"checkbox\" data-security=\"portail\" />
-                <div class=\"card-bg\"></div>
+              <label class="option-card">
+                <input type="checkbox" data-security="portail" />
+                <div class="card-bg"></div>
                 <span>Portail captif avancé</span>
                 <small>Portail personnalisé avec vouchers et conditions légales.</small>
               </label>
             </div>
           </div>
-          <div class=\"grid two\">
-            <div class=\"field\">
-              <label for=\"workstationCount\">Nombre de postes de travail</label>
-              <input type=\"number\" id=\"workstationCount\" min=\"0\" value=\"25\" />
+          <div class="grid two">
+            <div class="field">
+              <label for="workstationCount">Nombre de postes de travail</label>
+              <input type="number" id="workstationCount" min="0" value="25" />
             </div>
-            <div class=\"field\">
-              <label for=\"bandwidthPerUser\">Besoins moyens par poste (Mbps)</label>
-              <input type=\"number\" id=\"bandwidthPerUser\" min=\"0\" value=\"50\" />
+            <div class="field">
+              <label for="bandwidthPerUser">Besoins moyens par poste (Mbps)</label>
+              <input type="number" id="bandwidthPerUser" min="0" value="50" />
             </div>
-            <div class=\"field\">
-              <label for=\"cameraCountBandwidth\">Nombre de flux vidéo critiques</label>
-              <input type=\"number\" id=\"cameraCountBandwidth\" min=\"0\" value=\"0\" />
+            <div class="field">
+              <label for="cameraCountBandwidth">Nombre de flux vidéo critiques</label>
+              <input type="number" id="cameraCountBandwidth" min="0" value="0" />
             </div>
-            <div class=\"field\">
-              <label for=\"bandwidthPerCamera\">Débit par flux (Mbps)</label>
-              <input type=\"number\" id=\"bandwidthPerCamera\" min=\"0\" value=\"4\" />
+            <div class="field">
+              <label for="bandwidthPerCamera">Débit par flux (Mbps)</label>
+              <input type="number" id="bandwidthPerCamera" min="0" value="4" />
             </div>
           </div>
         </div>
       </section>
 
-      <section class=\"step\" data-step=\"3\">
+      <section class="step" data-step="3">
         <h2>Étape 3 · Vidéosurveillance VIGI</h2>
-        <p class=\"description\">Intégrez un dispositif complet de vidéosurveillance et dimensionnez le stockage.</p>
-        <div class=\"inline-options\">
+        <p class="description">Intégrez un dispositif complet de vidéosurveillance et dimensionnez le stockage.</p>
+        <div class="inline-options">
           <label>
-            <input type=\"radio\" name=\"cctv\" value=\"non\" checked />
+            <input type="radio" name="cctv" value="non" checked />
             <span>Pas de caméras</span>
           </label>
           <label>
-            <input type=\"radio\" name=\"cctv\" value=\"oui\" />
+            <input type="radio" name="cctv" value="oui" />
             <span>Ajouter la vidéosurveillance</span>
           </label>
         </div>
 
-        <div id=\"cctvDetails\" class=\"hidden\">
-          <div class=\"grid two\">
-            <div class=\"field\">
-              <label for=\"cctvInteriorCount\">Caméras intérieures</label>
-              <input type=\"number\" id=\"cctvInteriorCount\" min=\"0\" value=\"4\" />
+        <div id="cctvDetails" class="hidden">
+          <div class="grid two">
+            <div class="field">
+              <label for="cctvInteriorCount">Caméras intérieures</label>
+              <input type="number" id="cctvInteriorCount" min="0" value="4" />
             </div>
-            <div class=\"field\">
-              <label for=\"cctvExteriorCount\">Caméras extérieures</label>
-              <input type=\"number\" id=\"cctvExteriorCount\" min=\"0\" value=\"2\" />
+            <div class="field">
+              <label for="cctvExteriorCount">Caméras extérieures</label>
+              <input type="number" id="cctvExteriorCount" min="0" value="2" />
             </div>
           </div>
-          <div class=\"field\">
+          <div class="field">
             <label>Durée de rétention</label>
-            <div class=\"inline-options\">
+            <div class="inline-options">
               <label>
-                <input type=\"radio\" name=\"retention\" value=\"7\" />
+                <input type="radio" name="retention" value="7" />
                 <span>7 jours</span>
               </label>
               <label>
-                <input type=\"radio\" name=\"retention\" value=\"15\" checked />
+                <input type="radio" name="retention" value="15" checked />
                 <span>15 jours</span>
               </label>
               <label>
-                <input type=\"radio\" name=\"retention\" value=\"30\" />
+                <input type="radio" name="retention" value="30" />
                 <span>30 jours</span>
               </label>
               <label>
-                <input type=\"radio\" name=\"retention\" value=\"60\" />
+                <input type="radio" name="retention" value="60" />
                 <span>60 jours</span>
               </label>
             </div>
           </div>
 
-          <button class=\"toggle-advanced\" type=\"button\" data-advanced-target=\"advanced-step3\">Afficher les options avancées</button>
-          <div class=\"advanced hidden\" id=\"advanced-step3\">
-            <div class=\"grid two\">
-              <div class=\"field\">
+          <button class="toggle-advanced" type="button" data-advanced-target="advanced-step3">Afficher les options avancées</button>
+          <div class="advanced hidden" id="advanced-step3">
+            <div class="grid two">
+              <div class="field">
                 <label>Répartition des caméras intérieures</label>
-                <div class=\"grid\">
+                <div class="grid">
                   <label>
                     Dôme C440
-                    <input type=\"number\" id=\"cctvDomeCount\" min=\"0\" value=\"3\" />
+                    <input type="number" id="cctvDomeCount" min="0" value="3" />
                   </label>
                   <label>
                     Turret C240
-                    <input type=\"number\" id=\"cctvTurretCount\" min=\"0\" value=\"1\" />
+                    <input type="number" id="cctvTurretCount" min="0" value="1" />
                   </label>
                   <label>
                     Bullet C340
-                    <input type=\"number\" id=\"cctvInteriorBulletCount\" min=\"0\" value=\"0\" />
+                    <input type="number" id="cctvInteriorBulletCount" min="0" value="0" />
                   </label>
                 </div>
               </div>
-              <div class=\"field\">
+              <div class="field">
                 <label>Répartition des caméras extérieures</label>
-                <div class=\"grid\">
+                <div class="grid">
                   <label>
                     Bullet C340
-                    <input type=\"number\" id=\"cctvExteriorBulletCount\" min=\"0\" value=\"2\" />
+                    <input type="number" id="cctvExteriorBulletCount" min="0" value="2" />
                   </label>
-                  <label class=\"inline-options\" style=\"margin-top:0.5rem;\">
-                    <input type=\"checkbox\" id=\"cctvAiCheckbox\" />
+                  <label class="inline-options" style="margin-top:0.5rem;">
+                    <input type="checkbox" id="cctvAiCheckbox" />
                     <span>Analyse IA (véhicules / humains)</span>
                   </label>
                 </div>
               </div>
             </div>
 
-            <div class=\"field\">
+            <div class="field">
               <label>Résolution souhaitée</label>
-              <div class=\"inline-options\">
+              <div class="inline-options">
                 <label>
-                  <input type=\"radio\" name=\"resolution\" value=\"1080p\" />
+                  <input type="radio" name="resolution" value="1080p" />
                   <span>1080p</span>
                 </label>
                 <label>
-                  <input type=\"radio\" name=\"resolution\" value=\"4MP\" checked />
+                  <input type="radio" name="resolution" value="4MP" checked />
                   <span>4MP</span>
                 </label>
                 <label>
-                  <input type=\"radio\" name=\"resolution\" value=\"8MP\" />
+                  <input type="radio" name="resolution" value="8MP" />
                   <span>8MP / 4K</span>
                 </label>
               </div>
             </div>
 
-            <div class=\"field\">
+            <div class="field">
               <label>Mode d'enregistrement</label>
-              <div class=\"inline-options\">
+              <div class="inline-options">
                 <label>
-                  <input type=\"radio\" name=\"recordingMode\" value=\"continu\" checked />
+                  <input type="radio" name="recordingMode" value="continu" checked />
                   <span>Continu 24/7</span>
                 </label>
                 <label>
-                  <input type=\"radio\" name=\"recordingMode\" value=\"mouvement\" />
+                  <input type="radio" name="recordingMode" value="mouvement" />
                   <span>Sur détection de mouvement</span>
                 </label>
               </div>
@@ -899,34 +861,34 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
       </section>
 
-      <section class=\"step\" data-step=\"4\">
+      <section class="step" data-step="4">
         <h2>Étape 4 · Résultats et livrables</h2>
-        <p class=\"description\">Synthèse dynamique de votre configuration. Ajustez les étapes précédentes pour affiner la recommandation.</p>
-        <div class=\"summary-card\">
+        <p class="description">Synthèse dynamique de votre configuration. Ajustez les étapes précédentes pour affiner la recommandation.</p>
+        <div class="summary-card">
           <h3>Matériel recommandé</h3>
-          <ul id=\"hardwareList\"></ul>
+          <ul id="hardwareList"></ul>
         </div>
-        <div class=\"summary-card\">
+        <div class="summary-card">
           <h3>Indicateurs clés</h3>
-          <ul id=\"metricsList\"></ul>
+          <ul id="metricsList"></ul>
         </div>
-        <div class=\"summary-card\">
+        <div class="summary-card">
           <h3>Focus services &amp; sécurité</h3>
-          <ul id=\"serviceList\"></ul>
+          <ul id="serviceList"></ul>
         </div>
-        <div class=\"download-box\">
+        <div class="download-box">
           <strong>Téléchargez votre dossier professionnel :</strong> BOM détaillée (CSV + PDF), plan VLAN/IP et port-map (TXT + PDF), synthèse technique.
-          <button class=\"cta\" type=\"button\" id=\"downloadButton\">Télécharger le ZIP</button>
-          <p id=\"downloadHint\" style=\"margin-top:0.75rem;font-weight:500;\">Le dossier se calcule depuis le moteur Python embarqué.</p>
+          <button class="cta" type="button" id="downloadButton">Télécharger le ZIP</button>
+          <p id="downloadHint" style="margin-top:0.75rem;font-weight:500;">Le dossier se calcule depuis le moteur Python embarqué.</p>
         </div>
       </section>
 
-      <nav class=\"actions\">
-        <button type=\"button\" id=\"prevStep\">← Étape précédente</button>
-        <button type=\"button\" id=\"nextStep\">Étape suivante →</button>
+      <nav class="actions">
+        <button type="button" id="prevStep">← Étape précédente</button>
+        <button type="button" id="nextStep">Étape suivante →</button>
       </nav>
 
-      <footer class=\"page\">
+      <footer class="page">
         Cette application autonome calcule désormais la configuration et génère le dossier complet directement côté serveur Python.
       </footer>
     </main>
@@ -1408,337 +1370,3 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
   </body>
 </html>
-"""
-
-NOT_FOUND_TEMPLATE = """<!DOCTYPE html>
-<html lang=\"fr\">
-  <head>
-    <meta charset=\"utf-8\" />
-    <title>Page introuvable</title>
-  </head>
-  <body>
-    <h1>404 - Page introuvable</h1>
-    <p>La ressource demandée n'existe pas.</p>
-  </body>
-</html>
-"""
-
-
-def _response(status: str, body: str, start_response: StartResponse) -> Iterable[bytes]:
-    payload = body.encode("utf-8")
-    headers = [
-        ("Content-Type", "text/html; charset=utf-8"),
-        ("Content-Length", str(len(payload))),
-    ]
-    start_response(status, headers)
-    yield payload
-
-
-def _json_response(status: str, payload: Any, start_response: StartResponse) -> Iterable[bytes]:
-    data = json.dumps(payload).encode("utf-8")
-    headers = [
-        ("Content-Type", "application/json"),
-        ("Content-Length", str(len(data))),
-    ]
-    start_response(status, headers)
-    yield data
-
-
-def _binary_response(
-    status: str,
-    payload: bytes,
-    start_response: StartResponse,
-    content_type: str,
-    content_disposition: str | None = None,
-) -> Iterable[bytes]:
-    headers = [
-        ("Content-Type", content_type),
-        ("Content-Length", str(len(payload))),
-    ]
-    if content_disposition:
-        headers.append(("Content-Disposition", content_disposition))
-    start_response(status, headers)
-    yield payload
-
-
-def _read_request_json(environ: dict) -> dict:
-    try:
-        length = int(environ.get("CONTENT_LENGTH") or 0)
-    except (TypeError, ValueError):
-        length = 0
-
-    body = environ.get("wsgi.input")
-    raw = body.read(length) if body is not None else b""
-    if not raw:
-        return {}
-    try:
-        return json.loads(raw.decode("utf-8"))
-    except json.JSONDecodeError as exc:  # pragma: no cover - defensive guard
-        raise ValueError("Corps JSON invalide") from exc
-
-
-def _run_git_command(args: list[str]) -> str:
-    """Execute a Git command rooted at the project directory."""
-
-    result = run(
-        ["git", *args],
-        capture_output=True,
-        text=True,
-        cwd=PROJECT_ROOT,
-        check=True,
-    )
-    return result.stdout.strip()
-
-
-def _get_git_metadata_from_repo() -> tuple[str, str] | None:
-    """Return the active branch name and commit hash if available from Git."""
-
-    try:
-        branch = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"])
-        commit = _run_git_command(["rev-parse", "HEAD"])
-    except (CalledProcessError, FileNotFoundError, PermissionError):
-        return None
-
-    if not branch or not commit:
-        return None
-
-    return branch, commit
-
-
-def _get_git_metadata_from_env() -> tuple[str, str] | None:
-    """Return Git metadata provided via environment variables if present."""
-
-    branch = os.getenv("OMADABOM_GIT_BRANCH")
-    commit = os.getenv("OMADABOM_GIT_COMMIT")
-
-    if branch and commit:
-        return branch, commit
-
-    return None
-
-
-def _get_git_metadata() -> tuple[str, str] | None:
-    """Return the active branch name and commit hash from Git or the env."""
-
-    return _get_git_metadata_from_repo() or _get_git_metadata_from_env()
-
-
-def _get_git_history(limit: int = 5) -> list[tuple[str, str]]:
-    """Return the latest commits as (hash, subject) pairs."""
-
-    try:
-        output = _run_git_command(
-            ["log", f"-{limit}", "--pretty=format:%H%x1f%s"],
-        )
-    except (CalledProcessError, FileNotFoundError, PermissionError):
-        return []
-
-    commits: list[tuple[str, str]] = []
-    for line in output.splitlines():
-        if not line.strip():
-            continue
-        try:
-            commit, subject = line.split("\x1f", 1)
-        except ValueError:
-            continue
-        commits.append((commit, subject))
-
-    return commits
-
-
-def _render_git_metadata_html() -> str:
-    """Generate the HTML snippet describing the current Git state."""
-
-    metadata = _get_git_metadata()
-    if metadata is None:
-        return "Version Git indisponible (dépôt non initialisé)."
-
-    branch, commit = metadata
-    short_commit = commit[:7]
-    return f"Version Git : <code>{branch}</code> @ <code>{short_commit}</code>"
-
-
-def _render_git_history_html(limit: int = 5) -> str:
-    """Generate a HTML list describing the most recent commits."""
-
-    commits = _get_git_history(limit)
-    if commits:
-        items = "".join(
-            f"<li><code>{html.escape(commit[:7])}</code> – {html.escape(subject)}</li>"
-            for commit, subject in commits
-        )
-        return (
-            "<section class=\"git-history\">"
-            "<h3>Commits récents</h3>"
-            f"<ul>{items}</ul>"
-            "</section>"
-        )
-
-    metadata = _get_git_metadata()
-    if metadata is not None:
-        branch, commit = metadata
-        return (
-            "<p class=\"git-history-empty\">"
-            "Historique Git indisponible. Dernier commit connu : "
-            f"<code>{html.escape(branch)}</code> @ <code>{html.escape(commit[:7])}</code>"
-            "</p>"
-        )
-
-    return "<p class=\"git-history-empty\">Historique Git indisponible.</p>"
-
-
-def _render_homepage(git_html: str, history_html: str) -> str:
-    """Insert the Git metadata into the homepage template."""
-
-    return (
-        HTML_TEMPLATE.replace(GIT_PLACEHOLDER, git_html)
-        .replace(GIT_HISTORY_PLACEHOLDER, history_html)
-    )
-
-
-def export_static_site(
-    destination: Path,
-    *,
-    git_info_provider: Callable[[], str] | None = None,
-    git_history_provider: Callable[[], str] | None = None,
-) -> Path:
-    """Write the homepage template to *destination* and return the path.
-
-    The exported document mirrors what the embedded WSGI server would render.
-    This is primarily used to publish a static preview (e.g. via GitHub Pages)
-    where the Python backend n'est pas disponible.  When the user interagit
-    avec l'interface sur cette version statique, les appels réseau échoueront,
-    mais l'interface informera déjà l'utilisateur de l'absence du moteur.
-    """
-
-    info_provider = git_info_provider or _render_git_metadata_html
-    history_provider = git_history_provider or _render_git_history_html
-
-    destination = destination.expanduser()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-
-    html = _render_homepage(info_provider(), history_provider())
-    destination.write_text(html, encoding="utf-8")
-    return destination
-
-
-def create_app(
-    git_info_provider: Callable[[], str] | None = None,
-    git_history_provider: Callable[[], str] | None = None,
-) -> WSGIApplication:
-    """Return the WSGI application used by the project."""
-
-    info_provider = git_info_provider or _render_git_metadata_html
-    history_provider = git_history_provider or _render_git_history_html
-
-    def application(environ: dict, start_response: StartResponse) -> Iterable[bytes]:
-        path = environ.get("PATH_INFO", "/") or "/"
-        method = (environ.get("REQUEST_METHOD") or "GET").upper()
-
-        if path in {"", "/", "/index.html"}:
-            git_html = info_provider()
-            history_html = history_provider()
-            body = _render_homepage(git_html, history_html)
-            return _response("200 OK", body, start_response)
-
-        if path == "/api/generate" and method == "POST":
-            try:
-                payload = _read_request_json(environ)
-                plan = generate_plan(payload)
-            except ValueError as exc:
-                return _json_response("400 Bad Request", {"error": str(exc)}, start_response)
-            return _json_response(
-                "200 OK",
-                {
-                    "hardware": plan["hardware"],
-                    "metrics": plan["metrics"],
-                    "services": plan["services"],
-                },
-                start_response,
-            )
-
-        if path == "/api/download" and method == "POST":
-            try:
-                payload = _read_request_json(environ)
-                plan = generate_plan(payload)
-                archive = build_archive(plan)
-            except ValueError as exc:
-                return _json_response("400 Bad Request", {"error": str(exc)}, start_response)
-            return _binary_response(
-                "200 OK",
-                archive,
-                start_response,
-                "application/zip",
-                "attachment; filename=omadabom_dossier.zip",
-            )
-
-        return _response("404 Not Found", NOT_FOUND_TEMPLATE, start_response)
-
-    return application
-
-
-def serve(
-    host: str = "127.0.0.1",
-    port: int = 8000,
-    *,
-    catalogue: str | Path | None = None,
-    export_static: str | Path | None = None,
-) -> None:
-    """Launch the development server.
-
-    Parameters
-    ----------
-    host, port:
-        Network binding exposed by the WSGI server.
-    catalogue:
-        Optional path to an alternative catalogue JSON file.  When provided the
-        rule engine will be reconfigured before the server starts so that the
-        interface reflète immédiatement la personnalisation.
-    export_static:
-        Optional path to a static HTML file to generate instead of launching the
-        server.  This permet de publier rapidement une démo sur GitHub Pages.
-    """
-
-    if export_static is not None:
-        export_static_site(Path(export_static))
-        return
-
-    if catalogue is not None:
-        catalogue_path = Path(catalogue).expanduser()
-        if not catalogue_path.exists():
-            raise FileNotFoundError(
-                f"Catalogue introuvable : {catalogue_path!s}. Vérifiez le chemin fourni."
-            )
-        set_catalogue_path(catalogue_path)
-
-    with make_server(host, port, create_app()) as httpd:
-        print(f"Serving on http://{host}:{port} – press Ctrl+C to quit")
-        httpd.serve_forever()
-
-
-def _parse_args(
-    argv: list[str] | None = None,
-) -> tuple[str, int, str | None, str | None]:
-    parser = ArgumentParser(description="Launch the demonstration web server")
-    parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind")
-    parser.add_argument("--port", default=8000, type=int, help="Port to listen on")
-    parser.add_argument(
-        "--catalogue",
-        help="Chemin vers un catalogue JSON personnalisé pour alimenter le moteur",
-    )
-    parser.add_argument(
-        "--export-static",
-        dest="export_static",
-        help="Écrit la page HTML statique dans le chemin fourni et quitte",
-    )
-    args = parser.parse_args(argv)
-    return args.host, args.port, args.catalogue, args.export_static
-
-
-def main(argv: list[str] | None = None) -> None:
-    host, port, catalogue, export_static_path = _parse_args(argv)
-    serve(host, port, catalogue=catalogue, export_static=export_static_path)
-
-
-if __name__ == "__main__":  # pragma: no cover - manual execution helper
-    main()

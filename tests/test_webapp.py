@@ -277,12 +277,24 @@ def test_download_api_rejects_invalid_cctv() -> None:
 
 def test_parse_args_supports_catalogue(tmp_path: Path) -> None:
     catalogue = tmp_path / "custom.json"
-    host, port, catalogue_arg = webapp_module._parse_args(
+    host, port, catalogue_arg, export_static = webapp_module._parse_args(
         ["--host", "0.0.0.0", "--port", "9001", "--catalogue", str(catalogue)]
     )
     assert host == "0.0.0.0"
     assert port == 9001
     assert catalogue_arg == str(catalogue)
+    assert export_static is None
+
+
+def test_parse_args_supports_export_static(tmp_path: Path) -> None:
+    destination = tmp_path / "docs" / "index.html"
+    host, port, catalogue_arg, export_static = webapp_module._parse_args(
+        ["--export-static", str(destination)]
+    )
+    assert host == "127.0.0.1"
+    assert port == 8000
+    assert catalogue_arg is None
+    assert export_static == str(destination)
 
 
 def test_serve_sets_catalogue_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
@@ -312,3 +324,41 @@ def test_serve_sets_catalogue_override(monkeypatch: pytest.MonkeyPatch, tmp_path
 
     assert recorded["catalogue"] == catalogue
     assert recorded["served"] is True
+
+
+def test_serve_export_static_generates_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    exported = tmp_path / "docs" / "index.html"
+
+    called: dict[str, object] = {}
+
+    def fake_export(destination: Path, **_: object) -> Path:
+        called["destination"] = destination
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text("exported", encoding="utf-8")
+        return destination
+
+    def fail_server(*_: object, **__: object) -> None:  # pragma: no cover - should not run
+        raise AssertionError("serve_forever ne doit pas être appelé en mode export")
+
+    monkeypatch.setattr(webapp_module, "export_static_site", fake_export)
+    monkeypatch.setattr(webapp_module, "make_server", fail_server)
+
+    webapp_module.serve(export_static=str(exported))
+
+    assert called["destination"] == exported
+    assert exported.read_text(encoding="utf-8") == "exported"
+
+
+def test_export_static_site_writes_html(tmp_path: Path) -> None:
+    destination = tmp_path / "docs" / "index.html"
+
+    webapp_module.export_static_site(
+        destination,
+        git_info_provider=lambda: "<p>info</p>",
+        git_history_provider=lambda: "<p>history</p>",
+    )
+
+    content = destination.read_text(encoding="utf-8")
+    assert "<p>info</p>" in content
+    assert "<p>history</p>" in content
+    assert content.startswith("<!DOCTYPE html>")
