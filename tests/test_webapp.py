@@ -11,18 +11,24 @@ from wsgiref.util import setup_testing_defaults
 import pytest
 
 import webapp as webapp_module
-from webapp import GIT_PLACEHOLDER, NOT_FOUND_TEMPLATE, create_app
+from webapp import (
+    GIT_HISTORY_PLACEHOLDER,
+    GIT_PLACEHOLDER,
+    NOT_FOUND_TEMPLATE,
+    create_app,
+)
 
 
 def _invoke_app(
     path: str,
     git_info_provider: Callable[[], str] | None = None,
+    git_history_provider: Callable[[], str] | None = None,
     *,
     method: str = "GET",
     body: bytes = b"",
     content_type: str | None = "application/json",
 ) -> SimpleNamespace:
-    app = create_app(git_info_provider)
+    app = create_app(git_info_provider, git_history_provider)
     environ: dict = {}
     setup_testing_defaults(environ)
     environ["PATH_INFO"] = path
@@ -52,8 +58,13 @@ def _invoke_app(
 @pytest.mark.parametrize("path", ["/", "", "/index.html"])
 def test_homepage_paths_return_success(path: str) -> None:
     git_snippet = "Version Git de test"
+    history_snippet = "<section class=\"git-history\">Historique</section>"
 
-    response = _invoke_app(path, git_info_provider=lambda: git_snippet)
+    response = _invoke_app(
+        path,
+        git_info_provider=lambda: git_snippet,
+        git_history_provider=lambda: history_snippet,
+    )
 
     assert response.status == "200 OK"
     html = response.body.decode("utf-8")
@@ -62,7 +73,9 @@ def test_homepage_paths_return_success(path: str) -> None:
     assert "id=\"hardwareList\"" in html
     assert "Téléchargez votre dossier professionnel" in html
     assert git_snippet in html
+    assert history_snippet in html
     assert GIT_PLACEHOLDER not in html
+    assert GIT_HISTORY_PLACEHOLDER not in html
     assert ("Content-Type", "text/html; charset=utf-8") in response.headers
 
 
@@ -80,6 +93,17 @@ def test_homepage_invokes_git_provider_once() -> None:
         return "Git info"
 
     _invoke_app("/", git_info_provider=provider)
+    assert len(calls) == 1
+
+
+def test_homepage_invokes_git_history_provider_once() -> None:
+    calls: list[None] = []
+
+    def provider() -> str:
+        calls.append(None)
+        return "<section>Historique</section>"
+
+    _invoke_app("/", git_history_provider=provider)
     assert len(calls) == 1
 
 
@@ -117,9 +141,43 @@ def test_render_git_metadata_html_env_fallback(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_render_homepage_replaces_placeholder() -> None:
-    html = webapp_module._render_homepage("Contenu Git")
+    html = webapp_module._render_homepage("Contenu Git", "Historique")
     assert "Contenu Git" in html
+    assert "Historique" in html
     assert GIT_PLACEHOLDER not in html
+    assert GIT_HISTORY_PLACEHOLDER not in html
+
+
+def test_render_git_history_html_with_commits(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        webapp_module,
+        "_get_git_history",
+        lambda limit=5: [("abcdef123456", "Initial commit"), ("123456abcdef", "Fix")],
+    )
+    result = webapp_module._render_git_history_html()
+    assert "Commits récents" in result
+    assert "abcdef1" in result
+    assert "Initial commit" in result
+
+
+def test_render_git_history_html_falls_back_to_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(webapp_module, "_get_git_history", lambda limit=5: [])
+    monkeypatch.setattr(webapp_module, "_get_git_metadata", lambda: ("main", "abc123456789"))
+    result = webapp_module._render_git_history_html()
+    assert "Historique Git indisponible" in result
+    assert "main" in result
+    assert "abc1234" in result
+
+
+def test_render_git_history_html_handles_missing_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(webapp_module, "_get_git_history", lambda limit=5: [])
+    monkeypatch.setattr(webapp_module, "_get_git_metadata", lambda: None)
+    result = webapp_module._render_git_history_html()
+    assert "Historique Git indisponible" in result
 
 
 SAMPLE_STATE = {

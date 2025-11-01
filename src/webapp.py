@@ -6,6 +6,7 @@ providing a pleasant, working landing page for the project.
 """
 from __future__ import annotations
 
+import html
 import json
 import os
 from argparse import ArgumentParser
@@ -33,6 +34,7 @@ WSGIApplication = Callable[[dict, StartResponse], Iterable[bytes]]
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 GIT_PLACEHOLDER = "{{GIT_METADATA}}"
+GIT_HISTORY_PLACEHOLDER = "{{GIT_HISTORY}}"
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang=\"fr\">
@@ -112,6 +114,46 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         font-family: 'Fira Code', 'Source Code Pro', monospace;
         font-size: 0.9rem;
         opacity: 0.85;
+      }
+
+      .git-history {
+        margin-top: 0.75rem;
+        padding: 1.1rem 1.4rem;
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: var(--accent-soft);
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .git-history h3 {
+        margin: 0;
+        font-size: 1rem;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+
+      .git-history ul {
+        margin: 0;
+        padding-left: 1.1rem;
+        display: grid;
+        gap: 0.35rem;
+      }
+
+      .git-history li {
+        list-style: disc;
+        font-size: 0.95rem;
+      }
+
+      .git-history-empty {
+        margin-top: 0.75rem;
+        padding: 1rem 1.25rem;
+        border-radius: 18px;
+        border: 1px dashed var(--border);
+        background: rgba(255, 255, 255, 0.45);
+        font-size: 0.95rem;
+        line-height: 1.5;
       }
 
       .progress {
@@ -487,6 +529,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <p>Découvrez le parcours hybride Simple/Avancé d'OmadaBOM pour traduire vos besoins en une configuration réseau professionnelle, entièrement personnalisable.</p>
         </div>
         <div class=\"git-info\">{{GIT_METADATA}}</div>
+        {{GIT_HISTORY}}
       </header>
 
       <div class=\"progress\">
@@ -1453,6 +1496,29 @@ def _get_git_metadata() -> tuple[str, str] | None:
     return _get_git_metadata_from_repo() or _get_git_metadata_from_env()
 
 
+def _get_git_history(limit: int = 5) -> list[tuple[str, str]]:
+    """Return the latest commits as (hash, subject) pairs."""
+
+    try:
+        output = _run_git_command(
+            ["log", f"-{limit}", "--pretty=format:%H%x1f%s"],
+        )
+    except (CalledProcessError, FileNotFoundError, PermissionError):
+        return []
+
+    commits: list[tuple[str, str]] = []
+    for line in output.splitlines():
+        if not line.strip():
+            continue
+        try:
+            commit, subject = line.split("\x1f", 1)
+        except ValueError:
+            continue
+        commits.append((commit, subject))
+
+    return commits
+
+
 def _render_git_metadata_html() -> str:
     """Generate the HTML snippet describing the current Git state."""
 
@@ -1465,26 +1531,61 @@ def _render_git_metadata_html() -> str:
     return f"Version Git : <code>{branch}</code> @ <code>{short_commit}</code>"
 
 
-def _render_homepage(git_html: str) -> str:
+def _render_git_history_html(limit: int = 5) -> str:
+    """Generate a HTML list describing the most recent commits."""
+
+    commits = _get_git_history(limit)
+    if commits:
+        items = "".join(
+            f"<li><code>{html.escape(commit[:7])}</code> – {html.escape(subject)}</li>"
+            for commit, subject in commits
+        )
+        return (
+            "<section class=\"git-history\">"
+            "<h3>Commits récents</h3>"
+            f"<ul>{items}</ul>"
+            "</section>"
+        )
+
+    metadata = _get_git_metadata()
+    if metadata is not None:
+        branch, commit = metadata
+        return (
+            "<p class=\"git-history-empty\">"
+            "Historique Git indisponible. Dernier commit connu : "
+            f"<code>{html.escape(branch)}</code> @ <code>{html.escape(commit[:7])}</code>"
+            "</p>"
+        )
+
+    return "<p class=\"git-history-empty\">Historique Git indisponible.</p>"
+
+
+def _render_homepage(git_html: str, history_html: str) -> str:
     """Insert the Git metadata into the homepage template."""
 
-    return HTML_TEMPLATE.replace(GIT_PLACEHOLDER, git_html)
+    return (
+        HTML_TEMPLATE.replace(GIT_PLACEHOLDER, git_html)
+        .replace(GIT_HISTORY_PLACEHOLDER, history_html)
+    )
 
 
 def create_app(
     git_info_provider: Callable[[], str] | None = None,
+    git_history_provider: Callable[[], str] | None = None,
 ) -> WSGIApplication:
     """Return the WSGI application used by the project."""
 
-    provider = git_info_provider or _render_git_metadata_html
+    info_provider = git_info_provider or _render_git_metadata_html
+    history_provider = git_history_provider or _render_git_history_html
 
     def application(environ: dict, start_response: StartResponse) -> Iterable[bytes]:
         path = environ.get("PATH_INFO", "/") or "/"
         method = (environ.get("REQUEST_METHOD") or "GET").upper()
 
         if path in {"", "/", "/index.html"}:
-            git_html = provider()
-            body = _render_homepage(git_html)
+            git_html = info_provider()
+            history_html = history_provider()
+            body = _render_homepage(git_html, history_html)
             return _response("200 OK", body, start_response)
 
         if path == "/api/generate" and method == "POST":

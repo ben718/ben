@@ -28,12 +28,15 @@ alimente la synthèse affichée à l'écran, et l'endpoint `/api/download`
 retourne une archive ZIP contenant les livrables.
 
 La page d'accueil affiche automatiquement la branche et le dernier commit
-Git détectés. Si aucune information n'apparaît, initialisez ou mettez à jour
-votre dépôt avec `git init`, `git add` puis `git commit`. Dans un contexte où
-le dossier `.git` n'est pas disponible (archive, déploiement CI/CD, etc.),
-vous pouvez définir les variables d'environnement `OMADABOM_GIT_BRANCH` et
-`OMADABOM_GIT_COMMIT` avant de lancer le serveur afin d'afficher tout de même
-les métadonnées attendues.
+Git détectés, ainsi qu'une courte liste des derniers commits disponibles pour
+offrir un aperçu visuel de l'activité récente. Si aucune information n'apparaît,
+initialisez ou mettez à jour votre dépôt avec `git init`, `git add` puis
+`git commit`. Dans un contexte où le dossier `.git` n'est pas disponible
+(archive, déploiement CI/CD, etc.), vous pouvez définir les variables
+d'environnement `OMADABOM_GIT_BRANCH` et `OMADABOM_GIT_COMMIT` avant de lancer
+le serveur afin d'afficher tout de même les métadonnées attendues. En absence
+d'historique Git, la section dédiée indique simplement la dernière révision
+connue.
 
 ## Tests
 
@@ -77,3 +80,5 @@ tests automatisés si vous souhaitez injecter un catalogue temporaire.
 * Validations serveur : les incohérences (surface nulle, vidéosurveillance
   sans caméras, résolution inconnue…) retournent des erreurs explicites
   afin de guider la saisie et garantir un dimensionnement réaliste.
+* Historique Git embarqué : la page d'accueil liste les derniers commits pour
+  faciliter le contrôle visuel entre plusieurs déploiements ou démonstrations.
