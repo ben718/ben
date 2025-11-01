@@ -107,6 +107,15 @@ def test_render_git_metadata_html_formats_branch_and_commit(monkeypatch: pytest.
     assert "abcdef1" in result
 
 
+def test_render_git_metadata_html_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(webapp_module, "_get_git_metadata_from_repo", lambda: None)
+    monkeypatch.setenv("OMADABOM_GIT_BRANCH", "release")
+    monkeypatch.setenv("OMADABOM_GIT_COMMIT", "1234567890")
+    result = webapp_module._render_git_metadata_html()
+    assert "release" in result
+    assert "1234567" in result
+
+
 def test_render_homepage_replaces_placeholder() -> None:
     html = webapp_module._render_homepage("Contenu Git")
     assert "Contenu Git" in html

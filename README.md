@@ -29,7 +29,11 @@ retourne une archive ZIP contenant les livrables.
 
 La page d'accueil affiche automatiquement la branche et le dernier commit
 Git détectés. Si aucune information n'apparaît, initialisez ou mettez à jour
-votre dépôt avec `git init`, `git add` puis `git commit`.
+votre dépôt avec `git init`, `git add` puis `git commit`. Dans un contexte où
+le dossier `.git` n'est pas disponible (archive, déploiement CI/CD, etc.),
+vous pouvez définir les variables d'environnement `OMADABOM_GIT_BRANCH` et
+`OMADABOM_GIT_COMMIT` avant de lancer le serveur afin d'afficher tout de même
+les métadonnées attendues.
 
 ## Tests
 

@@ -7,6 +7,7 @@ providing a pleasant, working landing page for the project.
 from __future__ import annotations
 
 import json
+import os
 from argparse import ArgumentParser
 from pathlib import Path
 from subprocess import CalledProcessError, run
@@ -1419,8 +1420,8 @@ def _run_git_command(args: list[str]) -> str:
     return result.stdout.strip()
 
 
-def _get_git_metadata() -> tuple[str, str] | None:
-    """Return the active branch name and commit hash if available."""
+def _get_git_metadata_from_repo() -> tuple[str, str] | None:
+    """Return the active branch name and commit hash if available from Git."""
 
     try:
         branch = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"])
@@ -1432,6 +1433,24 @@ def _get_git_metadata() -> tuple[str, str] | None:
         return None
 
     return branch, commit
+
+
+def _get_git_metadata_from_env() -> tuple[str, str] | None:
+    """Return Git metadata provided via environment variables if present."""
+
+    branch = os.getenv("OMADABOM_GIT_BRANCH")
+    commit = os.getenv("OMADABOM_GIT_COMMIT")
+
+    if branch and commit:
+        return branch, commit
+
+    return None
+
+
+def _get_git_metadata() -> tuple[str, str] | None:
+    """Return the active branch name and commit hash from Git or the env."""
+
+    return _get_git_metadata_from_repo() or _get_git_metadata_from_env()
 
 
 def _render_git_metadata_html() -> str:
