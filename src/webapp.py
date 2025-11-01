@@ -1,0 +1,1580 @@
+"""A tiny WSGI application that serves a functional HTML page.
+
+The goal of this module is to keep the application completely
+dependency-free so that it can run in minimal environments while still
+providing a pleasant, working landing page for the project.
+"""
+from __future__ import annotations
+
+from argparse import ArgumentParser
+from pathlib import Path
+from subprocess import CalledProcessError, run
+from typing import Callable, Iterable, List, Tuple
+from wsgiref.simple_server import make_server
+
+StartResponse = Callable[[str, List[Tuple[str, str]]], None]
+WSGIApplication = Callable[[dict, StartResponse], Iterable[bytes]]
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+GIT_PLACEHOLDER = "{{GIT_METADATA}}"
+
+HTML_TEMPLATE = """<!DOCTYPE html>
+<html lang=\"fr\">
+  <head>
+    <meta charset=\"utf-8\" />
+    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+    <title>OmadaBOM – configurez un réseau précis</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f5f7fb;
+        --fg: #0f172a;
+        --accent: #2563eb;
+        --accent-soft: rgba(37, 99, 235, 0.08);
+        --accent-strong: rgba(37, 99, 235, 0.15);
+        --card: rgba(255, 255, 255, 0.92);
+        --border: rgba(15, 23, 42, 0.08);
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0f172a;
+          --fg: #e2e8f0;
+          --card: rgba(15, 23, 42, 0.9);
+          --border: rgba(226, 232, 240, 0.12);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+        background: radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.12), transparent 55%),
+          radial-gradient(circle at 90% 10%, rgba(14, 165, 233, 0.12), transparent 60%),
+          var(--bg);
+        color: var(--fg);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: clamp(1.5rem, 5vw, 4rem);
+      }
+
+      main {
+        width: min(1080px, 100%);
+        background: var(--card);
+        border-radius: 32px;
+        padding: clamp(2rem, 5vw, 3.5rem);
+        box-shadow: 0 40px 80px -40px rgba(15, 23, 42, 0.4);
+        backdrop-filter: blur(22px);
+      }
+
+      header.hero {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        margin-bottom: 2.5rem;
+      }
+
+      header.hero h1 {
+        margin: 0;
+        font-size: clamp(2.2rem, 5vw, 3.4rem);
+        font-weight: 700;
+      }
+
+      header.hero p {
+        margin: 0;
+        max-width: 60ch;
+        line-height: 1.6;
+        font-size: 1.05rem;
+      }
+
+      .git-info {
+        font-family: 'Fira Code', 'Source Code Pro', monospace;
+        font-size: 0.9rem;
+        opacity: 0.85;
+      }
+
+      .progress {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 2rem;
+      }
+
+      .progress-bar {
+        flex: 1;
+        background: var(--border);
+        border-radius: 999px;
+        overflow: hidden;
+        height: 0.5rem;
+      }
+
+      .progress-fill {
+        width: 25%;
+        height: 100%;
+        background: linear-gradient(120deg, #2563eb, #1d4ed8);
+        transition: width 0.4s ease;
+      }
+
+      .progress span {
+        font-weight: 600;
+      }
+
+      .step {
+        display: none;
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: clamp(1.5rem, 3vw, 2.25rem);
+        background: rgba(255, 255, 255, 0.65);
+        backdrop-filter: blur(6px);
+        margin-bottom: 1.75rem;
+      }
+
+      .step.active {
+        display: block;
+      }
+
+      .step h2 {
+        margin-top: 0;
+        margin-bottom: 1rem;
+        font-size: 1.7rem;
+      }
+
+      .step > p.description {
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        color: rgba(15, 23, 42, 0.75);
+      }
+
+      .grid {
+        display: grid;
+        gap: 1rem;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      label.option-card {
+        display: block;
+        border-radius: 18px;
+        padding: 1.2rem;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.55);
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease, border 0.2s ease;
+        position: relative;
+        overflow: hidden;
+      }
+
+      label.option-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 16px 40px -28px rgba(37, 99, 235, 0.45);
+      }
+
+      label.option-card input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      label.option-card span {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+      }
+
+      label.option-card small {
+        color: rgba(15, 23, 42, 0.65);
+      }
+
+      label.option-card input:checked + span,
+      label.option-card input:checked ~ span {
+        color: #1d4ed8;
+      }
+
+      label.option-card input:checked ~ .card-bg {
+        opacity: 1;
+      }
+
+      label.option-card .card-bg {
+        position: absolute;
+        inset: 0;
+        background: var(--accent-soft);
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        z-index: -1;
+      }
+
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.25rem;
+      }
+
+      .field label {
+        font-weight: 600;
+      }
+
+      .field input[type='number'],
+      .field input[type='text'],
+      .field select {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 0.85rem 1rem;
+        font-size: 1rem;
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .inline-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      .inline-options label {
+        border-radius: 999px;
+        padding: 0.5rem 1rem;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .inline-options label input {
+        position: absolute;
+        opacity: 0;
+      }
+
+      .inline-options label span {
+        font-weight: 600;
+      }
+
+      .inline-options label input:checked + span {
+        color: #1d4ed8;
+      }
+
+      .toggle-advanced {
+        background: none;
+        border: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        margin-top: 1rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+
+      .advanced {
+        margin-top: 1.5rem;
+        padding-top: 1.25rem;
+        border-top: 1px dashed var(--border);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .zones-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        margin-top: 1rem;
+      }
+
+      .zones-list li {
+        list-style: none;
+        padding: 0.85rem 1rem;
+        border-radius: 16px;
+        background: var(--accent-soft);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .zones-list button {
+        border: none;
+        background: none;
+        color: #ef4444;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .qos-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.5rem;
+      }
+
+      .qos-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-radius: 14px;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .qos-item .controls {
+        display: flex;
+        gap: 0.25rem;
+      }
+
+      .qos-item button {
+        border: none;
+        background: var(--accent-soft);
+        color: #1d4ed8;
+        border-radius: 999px;
+        padding: 0.25rem 0.75rem;
+        cursor: pointer;
+        font-weight: 600;
+      }
+
+      .summary-card {
+        background: rgba(255, 255, 255, 0.75);
+        border-radius: 24px;
+        padding: 1.5rem;
+        border: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+
+      .summary-card h3 {
+        margin: 0;
+        font-size: 1.35rem;
+      }
+
+      .summary-card ul {
+        margin: 0;
+        padding-left: 1.2rem;
+      }
+
+      .summary-card li {
+        margin-bottom: 0.5rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        font-weight: 600;
+        font-size: 0.9rem;
+      }
+
+      nav.actions {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+      }
+
+      nav.actions button {
+        flex: 1;
+        border: none;
+        border-radius: 16px;
+        padding: 0.95rem 1.25rem;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      #prevStep {
+        background: rgba(37, 99, 235, 0.12);
+        color: #1d4ed8;
+      }
+
+      #nextStep {
+        background: linear-gradient(120deg, #2563eb, #1d4ed8);
+        color: white;
+        box-shadow: 0 18px 40px -25px rgba(37, 99, 235, 0.9);
+      }
+
+      nav.actions button:hover {
+        transform: translateY(-2px);
+      }
+
+      .download-box {
+        padding: 1.25rem;
+        border-radius: 18px;
+        background: var(--accent-soft);
+        border: 1px dashed rgba(37, 99, 235, 0.35);
+      }
+
+      .download-box strong {
+        display: block;
+        margin-bottom: 0.5rem;
+      }
+
+      .cta {
+        margin-top: 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: linear-gradient(120deg, #2563eb, #7c3aed);
+        color: white;
+        border-radius: 999px;
+        padding: 0.9rem 1.75rem;
+        text-decoration: none;
+        font-weight: 600;
+        box-shadow: 0 25px 60px -30px rgba(124, 58, 237, 0.75);
+      }
+
+      footer.page {
+        margin-top: 2.5rem;
+        text-align: center;
+        font-size: 0.9rem;
+        color: rgba(15, 23, 42, 0.6);
+      }
+
+      @media (max-width: 768px) {
+        body {
+          padding: 1rem;
+        }
+
+        main {
+          border-radius: 20px;
+          padding: 1.75rem;
+        }
+
+        .step {
+          border-radius: 18px;
+        }
+
+        nav.actions {
+          flex-direction: column;
+        }
+
+        nav.actions button {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header class=\"hero\">
+        <div>
+          <p class=\"pill\">Maquette fonctionnelle</p>
+          <h1>OmadaBOM – configurez un réseau précis, simplement</h1>
+          <p>Découvrez le parcours hybride Simple/Avancé d'OmadaBOM pour traduire vos besoins en une configuration réseau professionnelle, entièrement personnalisable.</p>
+        </div>
+        <div class=\"git-info\">{{GIT_METADATA}}</div>
+      </header>
+
+      <div class=\"progress\">
+        <div class=\"progress-bar\">
+          <div class=\"progress-fill\" id=\"progressFill\"></div>
+        </div>
+        <span id=\"progressLabel\">Étape 1 sur 4</span>
+      </div>
+
+      <section class=\"step active\" data-step=\"1\">
+        <h2>Étape 1 · Décrivez votre environnement</h2>
+        <p class=\"description\">Commencez par une estimation rapide, puis affinez avec des détails structurels si nécessaire.</p>
+        <div class=\"field\">
+          <label for=\"surfaceInput\">Surface totale à couvrir (m²)</label>
+          <input id=\"surfaceInput\" type=\"number\" min=\"1\" value=\"300\" />
+        </div>
+
+        <div class=\"field\">
+          <label>Type d'environnement principal</label>
+          <div class=\"grid two\">
+            <label class=\"option-card\">
+              <input type=\"radio\" name=\"environment\" value=\"bureau\" checked />
+              <div class=\"card-bg\"></div>
+              <span>🏢 Bureau</span>
+              <small>Open-space, salles de réunion, bureaux cloisonnés.</small>
+            </label>
+            <label class=\"option-card\">
+              <input type=\"radio\" name=\"environment\" value=\"maison\" />
+              <div class=\"card-bg\"></div>
+              <span>🏠 Maison</span>
+              <small>Résidences, villas, appartements spacieux.</small>
+            </label>
+            <label class=\"option-card\">
+              <input type=\"radio\" name=\"environment\" value=\"entrepot\" />
+              <div class=\"card-bg\"></div>
+              <span>🏭 Entrepôt</span>
+              <small>Logistique, ateliers, hangars industriels.</small>
+            </label>
+            <label class=\"option-card\">
+              <input type=\"radio\" name=\"environment\" value=\"hotel\" />
+              <div class=\"card-bg\"></div>
+              <span>🏨 Hôtel</span>
+              <small>Chambres, couloirs, espaces communs multiples.</small>
+            </label>
+            <label class=\"option-card\">
+              <input type=\"radio\" name=\"environment\" value=\"exterieur\" />
+              <div class=\"card-bg\"></div>
+              <span>🌳 Extérieur</span>
+              <small>Campus, parkings, jardins, zones urbaines.</small>
+            </label>
+          </div>
+        </div>
+
+        <div class=\"field\">
+          <label>Densité d'appareils attendue</label>
+          <div class=\"inline-options\">
+            <label>
+              <input type=\"radio\" name=\"density\" value=\"faible\" />
+              <span>Faible</span>
+            </label>
+            <label>
+              <input type=\"radio\" name=\"density\" value=\"moyenne\" checked />
+              <span>Moyenne</span>
+            </label>
+            <label>
+              <input type=\"radio\" name=\"density\" value=\"elevee\" />
+              <span>Élevée</span>
+            </label>
+          </div>
+        </div>
+
+        <button class=\"toggle-advanced\" type=\"button\" data-advanced-target=\"advanced-step1\">Afficher les options avancées</button>
+        <div class=\"advanced hidden\" id=\"advanced-step1\">
+          <div class=\"field\">
+            <label>Structure du bâtiment</label>
+            <div class=\"inline-options\">
+              <label>
+                <input type=\"radio\" name=\"structure\" value=\"cloisons\" checked />
+                <span>Cloisons légères</span>
+              </label>
+              <label>
+                <input type=\"radio\" name=\"structure\" value=\"murs\" />
+                <span>Murs porteurs</span>
+              </label>
+              <label>
+                <input type=\"radio\" name=\"structure\" value=\"metal\" />
+                <span>Structure métallique</span>
+              </label>
+            </div>
+          </div>
+
+          <div class=\"field\">
+            <label>Hauteur sous plafond</label>
+            <div class=\"inline-options\">
+              <label>
+                <input type=\"radio\" name=\"height\" value=\"standard\" checked />
+                <span>Standard &lt; 3m</span>
+              </label>
+              <label>
+                <input type=\"radio\" name=\"height\" value=\"elevee\" />
+                <span>Élevée 3-5m</span>
+              </label>
+              <label>
+                <input type=\"radio\" name=\"height\" value=\"tres\" />
+                <span>Très élevée &gt; 5m</span>
+              </label>
+            </div>
+          </div>
+
+          <div class=\"field\">
+            <label>Décomposez par zones (optionnel)</label>
+            <div class=\"grid two\">
+              <div class=\"field\">
+                <label for=\"zoneNameInput\">Nom de la zone</label>
+                <input id=\"zoneNameInput\" type=\"text\" placeholder=\"Ex : Open-space\" />
+              </div>
+              <div class=\"field\">
+                <label for=\"zoneSurfaceInput\">Surface (m²)</label>
+                <input id=\"zoneSurfaceInput\" type=\"number\" min=\"1\" />
+              </div>
+              <div class=\"field\">
+                <label for=\"zoneDensitySelect\">Densité</label>
+                <select id=\"zoneDensitySelect\">
+                  <option value=\"faible\">Faible</option>
+                  <option value=\"moyenne\" selected>Moyenne</option>
+                  <option value=\"elevee\">Élevée</option>
+                </select>
+              </div>
+            </div>
+            <button type=\"button\" id=\"addZoneButton\" class=\"toggle-advanced\">+ Ajouter cette zone</button>
+            <ul class=\"zones-list\" id=\"zoneList\"></ul>
+          </div>
+        </div>
+      </section>
+
+      <section class=\"step\" data-step=\"2\">
+        <h2>Étape 2 · Choisissez vos services</h2>
+        <p class=\"description\">Sélectionnez les usages clés pour adapter automatiquement la sécurité et la performance.</p>
+        <div class=\"grid\">
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"invites\" checked />
+            <div class=\"card-bg\"></div>
+            <span>Réseau invités</span>
+            <small>Wi-Fi isolé pour visiteurs et collaborateurs temporaires.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"voip\" />
+            <div class=\"card-bg\"></div>
+            <span>Téléphonie sur IP (VoIP)</span>
+            <small>Appels voix haute priorité et stabilité assurée.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"iot\" />
+            <div class=\"card-bg\"></div>
+            <span>Objets connectés (IoT)</span>
+            <small>Segmentation automatique des capteurs et équipements.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"haute_vitesse\" />
+            <div class=\"card-bg\"></div>
+            <span>Connexion &gt; 1 Gbit/s</span>
+            <small>Optimise pour la fibre multi-gigabit et le Wi-Fi 6/7.</small>
+          </label>
+        </div>
+
+        <button class=\"toggle-advanced\" type=\"button\" data-advanced-target=\"advanced-step2\">Afficher les options avancées</button>
+        <div class=\"advanced hidden\" id=\"advanced-step2\">
+          <div class=\"field\">
+            <label>Hiérarchisation du trafic (QoS)</label>
+            <div class=\"qos-list\" id=\"qosList\"></div>
+          </div>
+          <div class=\"field\">
+            <label>Exigences de sécurité spécifiques</label>
+            <div class=\"grid two\">
+              <label class=\"option-card\">
+                <input type=\"checkbox\" data-security=\"isolation\" checked />
+                <div class=\"card-bg\"></div>
+                <span>Isolation stricte des clients</span>
+                <small>Aucun appareil invité ne peut voir un autre appareil.</small>
+              </label>
+              <label class=\"option-card\">
+                <input type=\"checkbox\" data-security=\"filtrage\" />
+                <div class=\"card-bg\"></div>
+                <span>Filtrage MAC</span>
+                <small>Autoriser uniquement les équipements pré-enregistrés.</small>
+              </label>
+              <label class=\"option-card\">
+                <input type=\"checkbox\" data-security=\"portail\" />
+                <div class=\"card-bg\"></div>
+                <span>Portail captif avancé</span>
+                <small>Portail personnalisé avec vouchers et conditions légales.</small>
+              </label>
+            </div>
+          </div>
+          <div class=\"grid two\">
+            <div class=\"field\">
+              <label for=\"workstationCount\">Nombre de postes de travail</label>
+              <input type=\"number\" id=\"workstationCount\" min=\"0\" value=\"25\" />
+            </div>
+            <div class=\"field\">
+              <label for=\"bandwidthPerUser\">Besoins moyens par poste (Mbps)</label>
+              <input type=\"number\" id=\"bandwidthPerUser\" min=\"0\" value=\"50\" />
+            </div>
+            <div class=\"field\">
+              <label for=\"cameraCountBandwidth\">Nombre de flux vidéo critiques</label>
+              <input type=\"number\" id=\"cameraCountBandwidth\" min=\"0\" value=\"0\" />
+            </div>
+            <div class=\"field\">
+              <label for=\"bandwidthPerCamera\">Débit par flux (Mbps)</label>
+              <input type=\"number\" id=\"bandwidthPerCamera\" min=\"0\" value=\"4\" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class=\"step\" data-step=\"3\">
+        <h2>Étape 3 · Vidéosurveillance VIGI</h2>
+        <p class=\"description\">Intégrez un dispositif complet de vidéosurveillance et dimensionnez le stockage.</p>
+        <div class=\"inline-options\">
+          <label>
+            <input type=\"radio\" name=\"cctv\" value=\"non\" checked />
+            <span>Pas de caméras</span>
+          </label>
+          <label>
+            <input type=\"radio\" name=\"cctv\" value=\"oui\" />
+            <span>Ajouter la vidéosurveillance</span>
+          </label>
+        </div>
+
+        <div id=\"cctvDetails\" class=\"hidden\">
+          <div class=\"grid two\">
+            <div class=\"field\">
+              <label for=\"cctvInteriorCount\">Caméras intérieures</label>
+              <input type=\"number\" id=\"cctvInteriorCount\" min=\"0\" value=\"4\" />
+            </div>
+            <div class=\"field\">
+              <label for=\"cctvExteriorCount\">Caméras extérieures</label>
+              <input type=\"number\" id=\"cctvExteriorCount\" min=\"0\" value=\"2\" />
+            </div>
+          </div>
+          <div class=\"field\">
+            <label>Durée de rétention</label>
+            <div class=\"inline-options\">
+              <label>
+                <input type=\"radio\" name=\"retention\" value=\"7\" />
+                <span>7 jours</span>
+              </label>
+              <label>
+                <input type=\"radio\" name=\"retention\" value=\"15\" checked />
+                <span>15 jours</span>
+              </label>
+              <label>
+                <input type=\"radio\" name=\"retention\" value=\"30\" />
+                <span>30 jours</span>
+              </label>
+              <label>
+                <input type=\"radio\" name=\"retention\" value=\"60\" />
+                <span>60 jours</span>
+              </label>
+            </div>
+          </div>
+
+          <button class=\"toggle-advanced\" type=\"button\" data-advanced-target=\"advanced-step3\">Afficher les options avancées</button>
+          <div class=\"advanced hidden\" id=\"advanced-step3\">
+            <div class=\"grid two\">
+              <div class=\"field\">
+                <label>Répartition des caméras intérieures</label>
+                <div class=\"grid\">
+                  <label>
+                    Dôme C440
+                    <input type=\"number\" id=\"cctvDomeCount\" min=\"0\" value=\"3\" />
+                  </label>
+                  <label>
+                    Turret C240
+                    <input type=\"number\" id=\"cctvTurretCount\" min=\"0\" value=\"1\" />
+                  </label>
+                  <label>
+                    Bullet C340
+                    <input type=\"number\" id=\"cctvInteriorBulletCount\" min=\"0\" value=\"0\" />
+                  </label>
+                </div>
+              </div>
+              <div class=\"field\">
+                <label>Répartition des caméras extérieures</label>
+                <div class=\"grid\">
+                  <label>
+                    Bullet C340
+                    <input type=\"number\" id=\"cctvExteriorBulletCount\" min=\"0\" value=\"2\" />
+                  </label>
+                  <label class=\"inline-options\" style=\"margin-top:0.5rem;\">
+                    <input type=\"checkbox\" id=\"cctvAiCheckbox\" />
+                    <span>Analyse IA (véhicules / humains)</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div class=\"field\">
+              <label>Résolution souhaitée</label>
+              <div class=\"inline-options\">
+                <label>
+                  <input type=\"radio\" name=\"resolution\" value=\"1080p\" />
+                  <span>1080p</span>
+                </label>
+                <label>
+                  <input type=\"radio\" name=\"resolution\" value=\"4MP\" checked />
+                  <span>4MP</span>
+                </label>
+                <label>
+                  <input type=\"radio\" name=\"resolution\" value=\"8MP\" />
+                  <span>8MP / 4K</span>
+                </label>
+              </div>
+            </div>
+
+            <div class=\"field\">
+              <label>Mode d'enregistrement</label>
+              <div class=\"inline-options\">
+                <label>
+                  <input type=\"radio\" name=\"recordingMode\" value=\"continu\" checked />
+                  <span>Continu 24/7</span>
+                </label>
+                <label>
+                  <input type=\"radio\" name=\"recordingMode\" value=\"mouvement\" />
+                  <span>Sur détection de mouvement</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class=\"step\" data-step=\"4\">
+        <h2>Étape 4 · Résultats et livrables</h2>
+        <p class=\"description\">Synthèse dynamique de votre configuration. Ajustez les étapes précédentes pour affiner la recommandation.</p>
+        <div class=\"summary-card\">
+          <h3>Matériel recommandé</h3>
+          <ul id=\"hardwareList\"></ul>
+        </div>
+        <div class=\"summary-card\">
+          <h3>Indicateurs clés</h3>
+          <ul id=\"metricsList\"></ul>
+        </div>
+        <div class=\"summary-card\">
+          <h3>Focus services &amp; sécurité</h3>
+          <ul id=\"serviceList\"></ul>
+        </div>
+        <div class=\"download-box\">
+          <strong>Dossier professionnel disponible :</strong> BOM détaillée, plan VLAN/IP, port-map, calculs PoE &amp; stockage.
+          <a class=\"cta\" href=\"#\" aria-disabled=\"true\">Paiement simulé – 9,99 €</a>
+        </div>
+      </section>
+
+      <nav class=\"actions\">
+        <button type=\"button\" id=\"prevStep\">← Étape précédente</button>
+        <button type=\"button\" id=\"nextStep\">Étape suivante →</button>
+      </nav>
+
+      <footer class=\"page\">
+        Cette maquette démontre l'expérience hybride Simple / Avancé d'OmadaBOM. Tous les calculs sont simulés côté client pour illustrer le futur moteur professionnel.
+      </footer>
+    </main>
+
+    <script>
+      const state = {
+        surface: 300,
+        environment: 'bureau',
+        density: 'moyenne',
+        structure: 'cloisons',
+        height: 'standard',
+        zones: [],
+        services: { invites: true, voip: false, iot: false, haute_vitesse: false },
+        qosOrder: ['voip', 'visioconference', 'navigation', 'streaming', 'iot'],
+        security: { isolation: true, filtrage: false, portail: false },
+        bandwidth: { postes: 25, mbpsParPoste: 50, cameras: 0, mbpsParCamera: 4 },
+        cctv: {
+          enabled: false,
+          interior: 4,
+          exterior: 2,
+          retention: 15,
+          resolution: '4MP',
+          mode: 'continu',
+          interiorTypes: { dome: 3, turret: 1, bullet: 0 },
+          exteriorTypes: { bullet: 2, ai: false },
+        },
+      };
+
+      const euros = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+      const numberFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+
+      const AP_MODELS = {
+        eap610: { modele: 'TP-Link EAP610', sku: 'EAP610', poe: 14, prix: 129, multiGig: false },
+        eap650: { modele: 'TP-Link EAP650', sku: 'EAP650', poe: 18, prix: 189, multiGig: false },
+        eap673: { modele: 'TP-Link EAP673', sku: 'EAP673', poe: 19, prix: 239, multiGig: true },
+        eap690: { modele: 'TP-Link EAP690E HD', sku: 'EAP690EHD', poe: 23, prix: 479, multiGig: true },
+        eap615: { modele: 'TP-Link EAP615-Wall', sku: 'EAP615WALL', poe: 13, prix: 139, multiGig: false },
+        eap610Outdoor: { modele: 'TP-Link EAP610-Outdoor', sku: 'EAP610OUT', poe: 16, prix: 219, multiGig: false },
+      };
+
+      const SWITCHES = [
+        { modele: 'TL-SG2210MP', sku: 'TLSG2210MP', portsTotal: 10, portsPoe: 8, budget: 150, prix: 229, ports25: 0, ports10: 0, idle: 20 },
+        { modele: 'TL-SG2428P', sku: 'TLSG2428P', portsTotal: 28, portsPoe: 24, budget: 250, prix: 329, ports25: 0, ports10: 0, idle: 32 },
+        { modele: 'TL-SG3428MP', sku: 'TLSG3428MP', portsTotal: 28, portsPoe: 24, budget: 384, prix: 549, ports25: 0, ports10: 2, idle: 45 },
+        { modele: 'TL-SG3452XP', sku: 'TLSG3452XP', portsTotal: 52, portsPoe: 48, budget: 720, prix: 899, ports25: 4, ports10: 4, idle: 60 },
+      ];
+
+      const ROUTERS = {
+        er605: { modele: 'ER605', sku: 'ER605', prix: 119, conso: 18, sfpPlus: false },
+        er7206: { modele: 'ER7206', sku: 'ER7206', prix: 259, conso: 22, sfpPlus: false },
+        er8411: { modele: 'ER8411', sku: 'ER8411', prix: 549, conso: 28, sfpPlus: true },
+      };
+
+      const CONTROLLERS = {
+        oc200: { modele: 'OC200', sku: 'OC200', prix: 129, conso: 12 },
+        oc300: { modele: 'OC300', sku: 'OC300', prix: 269, conso: 18 },
+      };
+
+      const CAMERA_CATALOG = {
+        dome: { modele: 'VIGI C440 (Dôme intérieur)', sku: 'VIGIC440', prix: 159, poe: 11 },
+        turret: { modele: 'VIGI C240 (Turret intérieur)', sku: 'VIGIC240', prix: 129, poe: 9 },
+        interiorBullet: { modele: 'VIGI C340 (Bullet intérieur)', sku: 'VIGIC340', prix: 179, poe: 12 },
+        exterior: { modele: 'VIGI C340 (Bullet extérieur)', sku: 'VIGIC340EXT', prix: 199, poe: 14 },
+        exteriorAi: { modele: 'VIGI C340S (Bullet IA)', sku: 'VIGIC340S', prix: 249, poe: 16 },
+      };
+
+      const NVR_CATALOG = [
+        { modele: 'VIGI NVR1008H', sku: 'VIGINVR1008H', canaux: 8, prix: 199, conso: 18 },
+        { modele: 'VIGI NVR1108', sku: 'VIGINVR1108', canaux: 12, prix: 249, conso: 20 },
+        { modele: 'VIGI NVR1216', sku: 'VIGINVR1216', canaux: 16, prix: 399, conso: 24 },
+      ];
+
+      const HDD_OPTIONS = [
+        { capacite: 2, prix: 119 },
+        { capacite: 4, prix: 149 },
+        { capacite: 8, prix: 229 },
+        { capacite: 16, prix: 369 },
+      ];
+
+      const steps = Array.from(document.querySelectorAll('[data-step]'));
+      const progressFill = document.getElementById('progressFill');
+      const progressLabel = document.getElementById('progressLabel');
+      const nextBtn = document.getElementById('nextStep');
+      const prevBtn = document.getElementById('prevStep');
+      let currentStep = 1;
+
+      function notifyStateChange() {
+        if (currentStep === 4) {
+          renderSummary();
+        }
+      }
+
+      function updateProgress() {
+        const percent = (currentStep / steps.length) * 100;
+        progressFill.style.width = `${percent}%`;
+        progressLabel.textContent = `Étape ${currentStep} sur ${steps.length}`;
+        prevBtn.disabled = currentStep === 1;
+        nextBtn.textContent = currentStep === steps.length ? 'Revenir aux étapes' : 'Étape suivante →';
+      }
+
+      function showStep(step) {
+        steps.forEach((section) => {
+          section.classList.toggle('active', Number(section.dataset.step) === step);
+        });
+        currentStep = step;
+        updateProgress();
+        if (step === 4) {
+          renderSummary();
+        }
+      }
+
+      function toggleAdvanced(targetId, button) {
+        const block = document.getElementById(targetId);
+        block.classList.toggle('hidden');
+        const expanded = !block.classList.contains('hidden');
+        button.textContent = expanded ? 'Masquer les options avancées' : 'Afficher les options avancées';
+      }
+
+      document.querySelectorAll('.toggle-advanced').forEach((btn) => {
+        const target = btn.dataset.advancedTarget;
+        if (!target) return;
+        btn.addEventListener('click', () => toggleAdvanced(target, btn));
+      });
+
+      nextBtn.addEventListener('click', () => {
+        if (currentStep < steps.length) {
+          showStep(currentStep + 1);
+        } else {
+          showStep(1);
+        }
+      });
+
+      prevBtn.addEventListener('click', () => {
+        if (currentStep > 1) {
+          showStep(currentStep - 1);
+        }
+      });
+
+      document.getElementById('surfaceInput').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.surface = Number.isFinite(value) && value > 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.querySelectorAll('input[name="environment"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.environment = input.value;
+            notifyStateChange();
+          }
+        });
+      });
+
+      document.querySelectorAll('input[name="density"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.density = input.value;
+            notifyStateChange();
+          }
+        });
+      });
+
+      document.querySelectorAll('input[name="structure"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.structure = input.value;
+            notifyStateChange();
+          }
+        });
+      });
+
+      document.querySelectorAll('input[name="height"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.height = input.value;
+            notifyStateChange();
+          }
+        });
+      });
+
+      document.getElementById('addZoneButton').addEventListener('click', () => {
+        const name = document.getElementById('zoneNameInput').value.trim();
+        const surface = Number(document.getElementById('zoneSurfaceInput').value);
+        const density = document.getElementById('zoneDensitySelect').value;
+        if (!name || !Number.isFinite(surface) || surface <= 0) {
+          alert('Veuillez renseigner un nom et une surface valide.');
+          return;
+        }
+        state.zones.push({ id: crypto.randomUUID(), name, surface, density });
+        document.getElementById('zoneNameInput').value = '';
+        document.getElementById('zoneSurfaceInput').value = '';
+        renderZones();
+        notifyStateChange();
+      });
+
+      function renderZones() {
+        const list = document.getElementById('zoneList');
+        list.innerHTML = '';
+        state.zones.forEach((zone) => {
+          const li = document.createElement('li');
+          li.innerHTML = `<strong>${zone.name}</strong> — ${zone.surface} m² · densité ${zone.density}<button type="button">Supprimer</button>`;
+          li.querySelector('button').addEventListener('click', () => {
+            state.zones = state.zones.filter((item) => item.id !== zone.id);
+            renderZones();
+            notifyStateChange();
+          });
+          list.appendChild(li);
+        });
+      }
+
+      document.querySelectorAll('[data-service]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          state.services[checkbox.dataset.service] = checkbox.checked;
+          notifyStateChange();
+        });
+      });
+
+      const qosItems = [
+        { key: 'voip', label: 'Téléphonie (VoIP)' },
+        { key: 'visioconference', label: 'Visioconférence' },
+        { key: 'navigation', label: 'Navigation Web' },
+        { key: 'streaming', label: 'Streaming vidéo' },
+        { key: 'iot', label: 'IoT & capteurs' },
+      ];
+
+      function renderQosList() {
+        const container = document.getElementById('qosList');
+        container.innerHTML = '';
+        state.qosOrder.forEach((key, index) => {
+          const item = qosItems.find((entry) => entry.key === key);
+          if (!item) return;
+          const div = document.createElement('div');
+          div.className = 'qos-item';
+          div.innerHTML = `<span>${index + 1}. ${item.label}</span>`;
+          const controls = document.createElement('div');
+          controls.className = 'controls';
+          const up = document.createElement('button');
+          up.type = 'button';
+          up.textContent = '↑';
+          const down = document.createElement('button');
+          down.type = 'button';
+          down.textContent = '↓';
+          up.disabled = index === 0;
+          down.disabled = index === state.qosOrder.length - 1;
+          up.addEventListener('click', () => moveQos(index, -1));
+          down.addEventListener('click', () => moveQos(index, 1));
+          controls.appendChild(up);
+          controls.appendChild(down);
+          div.appendChild(controls);
+          container.appendChild(div);
+        });
+      }
+
+      function moveQos(index, delta) {
+        const newIndex = index + delta;
+        if (newIndex < 0 || newIndex >= state.qosOrder.length) return;
+        const [item] = state.qosOrder.splice(index, 1);
+        state.qosOrder.splice(newIndex, 0, item);
+        renderQosList();
+        notifyStateChange();
+      }
+
+      document.querySelectorAll('[data-security]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          state.security[checkbox.dataset.security] = checkbox.checked;
+          notifyStateChange();
+        });
+      });
+
+      document.getElementById('workstationCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.bandwidth.postes = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('bandwidthPerUser').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.bandwidth.mbpsParPoste = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('cameraCountBandwidth').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.bandwidth.cameras = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('bandwidthPerCamera').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.bandwidth.mbpsParCamera = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.querySelectorAll('input[name="cctv"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          const enabled = input.value === 'oui' && input.checked;
+          state.cctv.enabled = enabled;
+          document.getElementById('cctvDetails').classList.toggle('hidden', !enabled);
+          notifyStateChange();
+        });
+      });
+
+      function syncInteriorMix(total) {
+        const mix = state.cctv.interiorTypes;
+        const mixTotal = mix.dome + mix.turret + mix.bullet;
+        if (mixTotal === 0) {
+          mix.dome = total;
+          mix.turret = 0;
+          mix.bullet = 0;
+          return;
+        }
+        const ratio = total / mixTotal;
+        mix.dome = Math.max(0, Math.round(mix.dome * ratio));
+        mix.turret = Math.max(0, Math.round(mix.turret * ratio));
+        mix.bullet = Math.max(0, Math.round(mix.bullet * ratio));
+      }
+
+      function syncExteriorMix(total) {
+        const mix = state.cctv.exteriorTypes;
+        mix.bullet = Math.max(0, Math.round(total));
+      }
+
+      document.getElementById('cctvInteriorCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.cctv.interior = Number.isFinite(value) && value >= 0 ? value : 0;
+        syncInteriorMix(state.cctv.interior);
+        notifyStateChange();
+      });
+
+      document.getElementById('cctvExteriorCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.cctv.exterior = Number.isFinite(value) && value >= 0 ? value : 0;
+        syncExteriorMix(state.cctv.exterior);
+        notifyStateChange();
+      });
+
+      document.querySelectorAll('input[name="retention"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.cctv.retention = Number(input.value);
+            notifyStateChange();
+          }
+        });
+      });
+
+      document.getElementById('cctvDomeCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.cctv.interiorTypes.dome = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('cctvTurretCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.cctv.interiorTypes.turret = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('cctvInteriorBulletCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.cctv.interiorTypes.bullet = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('cctvExteriorBulletCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.cctv.exteriorTypes.bullet = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('cctvAiCheckbox').addEventListener('change', (event) => {
+        state.cctv.exteriorTypes.ai = event.target.checked;
+        notifyStateChange();
+      });
+
+      document.querySelectorAll('input[name="resolution"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.cctv.resolution = input.value.toUpperCase();
+            notifyStateChange();
+          }
+        });
+      });
+
+      document.querySelectorAll('input[name="recordingMode"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.cctv.mode = input.value;
+            notifyStateChange();
+          }
+        });
+      });
+
+      function baseRatioByEnvironment() {
+        const ratios = { bureau: 120, maison: 100, entrepot: 250, hotel: 30, exterieur: 500 };
+        return ratios[state.environment] || 120;
+      }
+
+      function densityFactor(density) {
+        return { faible: 1.2, moyenne: 1, elevee: 0.75 }[density] || 1;
+      }
+
+      function structureFactor(structure) {
+        return { cloisons: 1, murs: 0.85, metal: 0.7 }[structure] || 1;
+      }
+
+      function heightFactor(height) {
+        return { standard: 1, elevee: 0.95, tres: 1.15 }[height] || 1;
+      }
+
+      function computeAccessPoints() {
+        const base = baseRatioByEnvironment() * structureFactor(state.structure) * heightFactor(state.height);
+        const zones = state.zones.length ? state.zones : [{ surface: state.surface, density: state.density }];
+        let total = 0;
+        zones.forEach((zone) => {
+          const ratio = Math.max(35, base * densityFactor(zone.density || state.density));
+          total += Math.ceil(zone.surface / ratio);
+        });
+        return Math.max(total, 1);
+      }
+
+      function pickApEntry(apCount) {
+        if (state.environment === 'hotel') return AP_MODELS.eap615;
+        if (state.environment === 'exterieur') return AP_MODELS.eap610Outdoor;
+        if (state.density === 'elevee' || state.services.haute_vitesse) return AP_MODELS.eap690;
+        if (apCount >= 6) return AP_MODELS.eap673;
+        if (state.density === 'faible') return AP_MODELS.eap610;
+        return AP_MODELS.eap650;
+      }
+
+      function pickRouter(totalBandwidth, apEntry) {
+        if (state.services.haute_vitesse || totalBandwidth > 1000) {
+          return apEntry.multiGig ? ROUTERS.er7206 : ROUTERS.er8411;
+        }
+        if (totalBandwidth > 600) {
+          return ROUTERS.er7206;
+        }
+        return ROUTERS.er605;
+      }
+
+      function pickController(apCount, cameraCount) {
+        const devices = apCount + cameraCount + 1;
+        return devices > 25 ? CONTROLLERS.oc300 : CONTROLLERS.oc200;
+      }
+
+      function pickSwitch(poePorts, totalPorts, poeBudget, minSpeed) {
+        const candidates = SWITCHES.filter((sw) =>
+          sw.portsPoe >= poePorts && sw.portsTotal >= totalPorts && sw.budget >= poeBudget &&
+          (minSpeed === '10G' ? sw.ports10 > 0 : minSpeed === '2.5G' ? sw.ports25 > 0 || sw.ports10 > 0 : true)
+        );
+        return (candidates.length ? candidates : [SWITCHES[SWITCHES.length - 1]])[0];
+      }
+
+      function deriveCameraBom() {
+        if (!state.cctv.enabled) {
+          return { cameras: [], poe: 0, price: 0, count: 0 };
+        }
+        const entries = [];
+        const interiorMix = state.cctv.interiorTypes;
+        const totalInterior = Math.max(state.cctv.interior, 0);
+        const interiorTotalMix = Math.max(interiorMix.dome + interiorMix.turret + interiorMix.bullet, 1);
+        const scaleInterior = totalInterior / interiorTotalMix;
+        const domeQty = Math.round(interiorMix.dome * scaleInterior);
+        const turretQty = Math.round(interiorMix.turret * scaleInterior);
+        const bulletQty = Math.round(interiorMix.bullet * scaleInterior);
+        if (domeQty > 0) entries.push({ ...CAMERA_CATALOG.dome, quantite: domeQty });
+        if (turretQty > 0) entries.push({ ...CAMERA_CATALOG.turret, quantite: turretQty });
+        if (bulletQty > 0) entries.push({ ...CAMERA_CATALOG.interiorBullet, quantite: bulletQty });
+
+        const exteriorQty = Math.max(state.cctv.exterior, 0);
+        if (exteriorQty > 0) {
+          const aiCount = state.cctv.exteriorTypes.ai ? Math.max(1, Math.round(exteriorQty * 0.5)) : 0;
+          const classicCount = Math.max(exteriorQty - aiCount, 0);
+          if (classicCount > 0) entries.push({ ...CAMERA_CATALOG.exterior, quantite: classicCount });
+          if (aiCount > 0) entries.push({ ...CAMERA_CATALOG.exteriorAi, quantite: aiCount });
+        }
+
+        let poe = 0;
+        let price = 0;
+        let count = 0;
+        entries.forEach((camera) => {
+          poe += camera.poe * camera.quantite;
+          price += camera.prix * camera.quantite;
+          count += camera.quantite;
+        });
+
+        return { cameras: entries, poe, price, count };
+      }
+
+      function pickNvr(cameraCount) {
+        if (cameraCount === 0) {
+          return null;
+        }
+        return NVR_CATALOG.find((nvr) => nvr.canaux >= cameraCount) || NVR_CATALOG[NVR_CATALOG.length - 1];
+      }
+
+      function computeStorageTb(cameraCount, resolution, mode, retentionDays) {
+        if (cameraCount === 0) return 0;
+        const bitrate = { '1080P': 5, '4MP': 8, '8MP': 12 }[resolution] || 8;
+        const activityFactor = mode === 'mouvement' ? 0.3 : 1;
+        const storageMo = cameraCount * bitrate * 3600 * 24 * retentionDays * activityFactor / 8;
+        return storageMo / (1024 * 1024);
+      }
+
+      function pickStorageOption(requiredTb) {
+        if (requiredTb <= 0) return null;
+        return HDD_OPTIONS.find((option) => option.capacite >= requiredTb) || HDD_OPTIONS[HDD_OPTIONS.length - 1];
+      }
+
+      function buildBom() {
+        const apCount = computeAccessPoints();
+        const apEntry = pickApEntry(apCount);
+        const cameraResult = deriveCameraBom();
+        const cameraCount = cameraResult.count;
+        const poePerAp = apEntry.poe;
+        const poeBudgetDevices = apCount * poePerAp + cameraResult.poe;
+        const poeBudgetRequired = Math.ceil(poeBudgetDevices * 1.2);
+        const uplinks = 1 + (cameraCount > 0 ? 1 : 0);
+        const totalPoePorts = apCount + cameraCount;
+        const totalPorts = totalPoePorts + uplinks + Math.ceil(totalPoePorts * 0.25);
+        const bandwidthUsers = state.bandwidth.postes * state.bandwidth.mbpsParPoste;
+        const bandwidthVideo = state.bandwidth.cameras * state.bandwidth.mbpsParCamera;
+        const bandwidthTotal = bandwidthUsers + bandwidthVideo;
+        const routerEntry = pickRouter(bandwidthTotal, apEntry);
+        const minSpeed = routerEntry === ROUTERS.er8411 ? '10G' : state.services.haute_vitesse || apEntry.multiGig ? '2.5G' : '1G';
+        const switchEntry = pickSwitch(totalPoePorts, totalPorts, poeBudgetRequired, minSpeed);
+        const controllerEntry = pickController(apCount, cameraCount);
+        const nvrEntry = pickNvr(cameraCount);
+        const storageTb = computeStorageTb(cameraCount, state.cctv.resolution, state.cctv.mode, state.cctv.retention);
+        const storageOption = pickStorageOption(storageTb);
+        const modulesSfp = routerEntry.sfpPlus && switchEntry.ports10 > 0 ? [{ modele: 'TXM431-SR', sku: 'TXM431SR', quantite: 2, prix: 99 }] : [];
+
+        const prixTotal =
+          apCount * apEntry.prix +
+          switchEntry.prix +
+          routerEntry.prix +
+          controllerEntry.prix +
+          cameraResult.price +
+          (nvrEntry ? nvrEntry.prix : 0) +
+          (storageOption ? storageOption.prix : 0) +
+          modulesSfp.reduce((sum, item) => sum + item.prix, 0);
+
+        const consoAps = apCount * apEntry.poe;
+        const consoCameras = cameraResult.poe;
+        const consoSwitch = switchEntry.idle;
+        const consoRouter = routerEntry.conso;
+        const consoController = controllerEntry.conso;
+        const consoNvr = nvrEntry ? nvrEntry.conso : 0;
+        const consoTotale = consoAps + consoCameras + consoSwitch + consoRouter + consoController + consoNvr;
+        const opexKwh = (consoTotale / 1000) * 24 * 365;
+        const opexEuros = opexKwh * 0.25;
+
+        return {
+          aps: { ...apEntry, quantite: apCount },
+          switch: { ...switchEntry },
+          routeur: { ...routerEntry },
+          controleur: { ...controllerEntry },
+          modules: modulesSfp,
+          cameras: cameraResult.cameras,
+          nvr: nvrEntry,
+          stockage: storageOption ? { ...storageOption, requis: storageTb } : null,
+          synthese: {
+            poeRequis: poeBudgetRequired,
+            poeDispo: switchEntry.budget,
+            consoTotale,
+            opexKwh,
+            opexEuros,
+            bandePassante: bandwidthTotal,
+            prixTotal,
+          },
+        };
+      }
+
+      function summaryServices() {
+        const items = [];
+        if (state.services.invites) items.push('VLAN invités isolé + portail captif');
+        if (state.services.voip) items.push('QoS prioritaire VoIP');
+        if (state.services.iot) items.push('Segment IoT dédié et ACL restrictives');
+        if (state.services.haute_vitesse) items.push('Backbone multi-gigabit recommandé');
+        if (state.security.isolation) items.push('Client isolation activée');
+        if (state.security.filtrage) items.push('Filtrage MAC / 802.1X envisagé');
+        if (state.security.portail) items.push('Portail captif avancé avec vouchers');
+        items.push(`Priorités QoS : ${state.qosOrder.map((key) => qosItems.find((item) => item.key === key)?.label).filter(Boolean).join(' → ')}`);
+        return items;
+      }
+
+      function renderSummary() {
+        const bom = buildBom();
+        const hardwareList = document.getElementById('hardwareList');
+        const metricsList = document.getElementById('metricsList');
+        const serviceList = document.getElementById('serviceList');
+
+        const hardwareLines = [
+          `${bom.aps.quantite} × ${bom.aps.modele} (${bom.aps.sku})`,
+          `${bom.switch.modele} · ${bom.switch.portsPoe} ports PoE / ${bom.switch.budget} W`,
+          `${bom.routeur.modele} (${bom.routeur.sku})`,
+          `${bom.controleur.modele} (${bom.controleur.sku})`,
+        ];
+
+        bom.cameras.forEach((cam) => {
+          hardwareLines.push(`${cam.quantite} × ${cam.modele}`);
+        });
+        if (bom.nvr) {
+          hardwareLines.push(`${bom.nvr.modele} (${bom.nvr.sku})`);
+        }
+        if (bom.stockage) {
+          hardwareLines.push(`HDD surveillance ${bom.stockage.capacite} To (besoin ${bom.stockage.requis.toFixed(2)} To)`);
+        }
+        bom.modules.forEach((module) => {
+          hardwareLines.push(`${module.quantite} × ${module.modele}`);
+        });
+
+        const metricsLines = [
+          `Budget PoE requis : ${numberFormat.format(bom.synthese.poeRequis)} W`,
+          `Budget PoE disponible : ${numberFormat.format(bom.synthese.poeDispo)} W`,
+          `Consommation totale estimée : ${numberFormat.format(bom.synthese.consoTotale)} W`,
+          `OPEX annuel : ${numberFormat.format(bom.synthese.opexKwh)} kWh · ${euros.format(bom.synthese.opexEuros)}`,
+          `Bande passante agrégée : ${numberFormat.format(bom.synthese.bandePassante)} Mbps`,
+          `Investissement estimé (HT) : ${euros.format(bom.synthese.prixTotal)}`,
+        ];
+
+        const servicesLines = summaryServices();
+
+        hardwareList.innerHTML = hardwareLines.map((item) => `<li>${item}</li>`).join('');
+        metricsList.innerHTML = metricsLines.map((item) => `<li>${item}</li>`).join('');
+        serviceList.innerHTML = servicesLines.map((item) => `<li>${item}</li>`).join('');
+      }
+
+      renderQosList();
+      updateProgress();
+    </script>
+
+  </body>
+</html>
+"""
+
+NOT_FOUND_TEMPLATE = """<!DOCTYPE html>
+<html lang=\"fr\">
+  <head>
+    <meta charset=\"utf-8\" />
+    <title>Page introuvable</title>
+  </head>
+  <body>
+    <h1>404 - Page introuvable</h1>
+    <p>La ressource demandée n'existe pas.</p>
+  </body>
+</html>
+"""
+
+
+def _response(status: str, body: str, start_response: StartResponse) -> Iterable[bytes]:
+    payload = body.encode("utf-8")
+    headers = [
+        ("Content-Type", "text/html; charset=utf-8"),
+        ("Content-Length", str(len(payload))),
+    ]
+    start_response(status, headers)
+    yield payload
+
+
+def _run_git_command(args: list[str]) -> str:
+    """Execute a Git command rooted at the project directory."""
+
+    result = run(
+        ["git", *args],
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        check=True,
+    )
+    return result.stdout.strip()
+
+
+def _get_git_metadata() -> tuple[str, str] | None:
+    """Return the active branch name and commit hash if available."""
+
+    try:
+        branch = _run_git_command(["rev-parse", "--abbrev-ref", "HEAD"])
+        commit = _run_git_command(["rev-parse", "HEAD"])
+    except (CalledProcessError, FileNotFoundError, PermissionError):
+        return None
+
+    if not branch or not commit:
+        return None
+
+    return branch, commit
+
+
+def _render_git_metadata_html() -> str:
+    """Generate the HTML snippet describing the current Git state."""
+
+    metadata = _get_git_metadata()
+    if metadata is None:
+        return "Version Git indisponible (dépôt non initialisé)."
+
+    branch, commit = metadata
+    short_commit = commit[:7]
+    return f"Version Git : <code>{branch}</code> @ <code>{short_commit}</code>"
+
+
+def _render_homepage(git_html: str) -> str:
+    """Insert the Git metadata into the homepage template."""
+
+    return HTML_TEMPLATE.replace(GIT_PLACEHOLDER, git_html)
+
+
+def create_app(
+    git_info_provider: Callable[[], str] | None = None,
+) -> WSGIApplication:
+    """Return the WSGI application used by the project."""
+
+    provider = git_info_provider or _render_git_metadata_html
+
+    def application(environ: dict, start_response: StartResponse) -> Iterable[bytes]:
+        path = environ.get("PATH_INFO", "/") or "/"
+        if path in {"", "/", "/index.html"}:
+            git_html = provider()
+            body = _render_homepage(git_html)
+            return _response("200 OK", body, start_response)
+
+        return _response("404 Not Found", NOT_FOUND_TEMPLATE, start_response)
+
+    return application
+
+
+def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Launch the development server."""
+
+    with make_server(host, port, create_app()) as httpd:
+        print(f"Serving on http://{host}:{port} – press Ctrl+C to quit")
+        httpd.serve_forever()
+
+
+def _parse_args(argv: list[str] | None = None) -> tuple[str, int]:
+    parser = ArgumentParser(description="Launch the demonstration web server")
+    parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind")
+    parser.add_argument("--port", default=8000, type=int, help="Port to listen on")
+    args = parser.parse_args(argv)
+    return args.host, args.port
+
+
+def main(argv: list[str] | None = None) -> None:
+    host, port = _parse_args(argv)
+    serve(host, port)
+
+
+if __name__ == "__main__":  # pragma: no cover - manual execution helper
+    main()
