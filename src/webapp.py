@@ -24,7 +24,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <head>
     <meta charset=\"utf-8\" />
     <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
-    <title>OmadaBOM – maquette fonctionnelle</title>
+    <title>OmadaBOM – configurez un réseau précis</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -859,12 +859,69 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         },
       };
 
+      const euros = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 });
+      const numberFormat = new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 });
+
+      const AP_MODELS = {
+        eap610: { modele: 'TP-Link EAP610', sku: 'EAP610', poe: 14, prix: 129, multiGig: false },
+        eap650: { modele: 'TP-Link EAP650', sku: 'EAP650', poe: 18, prix: 189, multiGig: false },
+        eap673: { modele: 'TP-Link EAP673', sku: 'EAP673', poe: 19, prix: 239, multiGig: true },
+        eap690: { modele: 'TP-Link EAP690E HD', sku: 'EAP690EHD', poe: 23, prix: 479, multiGig: true },
+        eap615: { modele: 'TP-Link EAP615-Wall', sku: 'EAP615WALL', poe: 13, prix: 139, multiGig: false },
+        eap610Outdoor: { modele: 'TP-Link EAP610-Outdoor', sku: 'EAP610OUT', poe: 16, prix: 219, multiGig: false },
+      };
+
+      const SWITCHES = [
+        { modele: 'TL-SG2210MP', sku: 'TLSG2210MP', portsTotal: 10, portsPoe: 8, budget: 150, prix: 229, ports25: 0, ports10: 0, idle: 20 },
+        { modele: 'TL-SG2428P', sku: 'TLSG2428P', portsTotal: 28, portsPoe: 24, budget: 250, prix: 329, ports25: 0, ports10: 0, idle: 32 },
+        { modele: 'TL-SG3428MP', sku: 'TLSG3428MP', portsTotal: 28, portsPoe: 24, budget: 384, prix: 549, ports25: 0, ports10: 2, idle: 45 },
+        { modele: 'TL-SG3452XP', sku: 'TLSG3452XP', portsTotal: 52, portsPoe: 48, budget: 720, prix: 899, ports25: 4, ports10: 4, idle: 60 },
+      ];
+
+      const ROUTERS = {
+        er605: { modele: 'ER605', sku: 'ER605', prix: 119, conso: 18, sfpPlus: false },
+        er7206: { modele: 'ER7206', sku: 'ER7206', prix: 259, conso: 22, sfpPlus: false },
+        er8411: { modele: 'ER8411', sku: 'ER8411', prix: 549, conso: 28, sfpPlus: true },
+      };
+
+      const CONTROLLERS = {
+        oc200: { modele: 'OC200', sku: 'OC200', prix: 129, conso: 12 },
+        oc300: { modele: 'OC300', sku: 'OC300', prix: 269, conso: 18 },
+      };
+
+      const CAMERA_CATALOG = {
+        dome: { modele: 'VIGI C440 (Dôme intérieur)', sku: 'VIGIC440', prix: 159, poe: 11 },
+        turret: { modele: 'VIGI C240 (Turret intérieur)', sku: 'VIGIC240', prix: 129, poe: 9 },
+        interiorBullet: { modele: 'VIGI C340 (Bullet intérieur)', sku: 'VIGIC340', prix: 179, poe: 12 },
+        exterior: { modele: 'VIGI C340 (Bullet extérieur)', sku: 'VIGIC340EXT', prix: 199, poe: 14 },
+        exteriorAi: { modele: 'VIGI C340S (Bullet IA)', sku: 'VIGIC340S', prix: 249, poe: 16 },
+      };
+
+      const NVR_CATALOG = [
+        { modele: 'VIGI NVR1008H', sku: 'VIGINVR1008H', canaux: 8, prix: 199, conso: 18 },
+        { modele: 'VIGI NVR1108', sku: 'VIGINVR1108', canaux: 12, prix: 249, conso: 20 },
+        { modele: 'VIGI NVR1216', sku: 'VIGINVR1216', canaux: 16, prix: 399, conso: 24 },
+      ];
+
+      const HDD_OPTIONS = [
+        { capacite: 2, prix: 119 },
+        { capacite: 4, prix: 149 },
+        { capacite: 8, prix: 229 },
+        { capacite: 16, prix: 369 },
+      ];
+
       const steps = Array.from(document.querySelectorAll('[data-step]'));
       const progressFill = document.getElementById('progressFill');
       const progressLabel = document.getElementById('progressLabel');
       const nextBtn = document.getElementById('nextStep');
       const prevBtn = document.getElementById('prevStep');
       let currentStep = 1;
+
+      function notifyStateChange() {
+        if (currentStep === 4) {
+          renderSummary();
+        }
+      }
 
       function updateProgress() {
         const percent = (currentStep / steps.length) * 100;
@@ -915,36 +972,41 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('surfaceInput').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.surface = Number.isFinite(value) && value > 0 ? value : 0;
+        notifyStateChange();
       });
 
-      document.querySelectorAll('input[name=\"environment\"]').forEach((input) => {
+      document.querySelectorAll('input[name="environment"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
             state.environment = input.value;
+            notifyStateChange();
           }
         });
       });
 
-      document.querySelectorAll('input[name=\"density\"]').forEach((input) => {
+      document.querySelectorAll('input[name="density"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
             state.density = input.value;
+            notifyStateChange();
           }
         });
       });
 
-      document.querySelectorAll('input[name=\"structure\"]').forEach((input) => {
+      document.querySelectorAll('input[name="structure"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
             state.structure = input.value;
+            notifyStateChange();
           }
         });
       });
 
-      document.querySelectorAll('input[name=\"height\"]').forEach((input) => {
+      document.querySelectorAll('input[name="height"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
             state.height = input.value;
+            notifyStateChange();
           }
         });
       });
@@ -961,6 +1023,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         document.getElementById('zoneNameInput').value = '';
         document.getElementById('zoneSurfaceInput').value = '';
         renderZones();
+        notifyStateChange();
       });
 
       function renderZones() {
@@ -968,10 +1031,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         list.innerHTML = '';
         state.zones.forEach((zone) => {
           const li = document.createElement('li');
-          li.innerHTML = `<strong>${zone.name}</strong> — ${zone.surface} m² · densité ${zone.density}<button type=\"button\">Supprimer</button>`;
+          li.innerHTML = `<strong>${zone.name}</strong> — ${zone.surface} m² · densité ${zone.density}<button type="button">Supprimer</button>`;
           li.querySelector('button').addEventListener('click', () => {
             state.zones = state.zones.filter((item) => item.id !== zone.id);
             renderZones();
+            notifyStateChange();
           });
           list.appendChild(li);
         });
@@ -980,6 +1044,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.querySelectorAll('[data-service]').forEach((checkbox) => {
         checkbox.addEventListener('change', () => {
           state.services[checkbox.dataset.service] = checkbox.checked;
+          notifyStateChange();
         });
       });
 
@@ -1025,56 +1090,88 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         const [item] = state.qosOrder.splice(index, 1);
         state.qosOrder.splice(newIndex, 0, item);
         renderQosList();
+        notifyStateChange();
       }
 
       document.querySelectorAll('[data-security]').forEach((checkbox) => {
         checkbox.addEventListener('change', () => {
           state.security[checkbox.dataset.security] = checkbox.checked;
+          notifyStateChange();
         });
       });
 
       document.getElementById('workstationCount').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.bandwidth.postes = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
       document.getElementById('bandwidthPerUser').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.bandwidth.mbpsParPoste = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
       document.getElementById('cameraCountBandwidth').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.bandwidth.cameras = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
       document.getElementById('bandwidthPerCamera').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.bandwidth.mbpsParCamera = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
-      document.querySelectorAll('input[name=\"cctv\"]').forEach((input) => {
+      document.querySelectorAll('input[name="cctv"]').forEach((input) => {
         input.addEventListener('change', () => {
           const enabled = input.value === 'oui' && input.checked;
           state.cctv.enabled = enabled;
           document.getElementById('cctvDetails').classList.toggle('hidden', !enabled);
+          notifyStateChange();
         });
       });
+
+      function syncInteriorMix(total) {
+        const mix = state.cctv.interiorTypes;
+        const mixTotal = mix.dome + mix.turret + mix.bullet;
+        if (mixTotal === 0) {
+          mix.dome = total;
+          mix.turret = 0;
+          mix.bullet = 0;
+          return;
+        }
+        const ratio = total / mixTotal;
+        mix.dome = Math.max(0, Math.round(mix.dome * ratio));
+        mix.turret = Math.max(0, Math.round(mix.turret * ratio));
+        mix.bullet = Math.max(0, Math.round(mix.bullet * ratio));
+      }
+
+      function syncExteriorMix(total) {
+        const mix = state.cctv.exteriorTypes;
+        mix.bullet = Math.max(0, Math.round(total));
+      }
 
       document.getElementById('cctvInteriorCount').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.cctv.interior = Number.isFinite(value) && value >= 0 ? value : 0;
+        syncInteriorMix(state.cctv.interior);
+        notifyStateChange();
       });
 
       document.getElementById('cctvExteriorCount').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.cctv.exterior = Number.isFinite(value) && value >= 0 ? value : 0;
+        syncExteriorMix(state.cctv.exterior);
+        notifyStateChange();
       });
 
-      document.querySelectorAll('input[name=\"retention\"]').forEach((input) => {
+      document.querySelectorAll('input[name="retention"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
             state.cctv.retention = Number(input.value);
+            notifyStateChange();
           }
         });
       });
@@ -1082,160 +1179,289 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('cctvDomeCount').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.cctv.interiorTypes.dome = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
       document.getElementById('cctvTurretCount').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.cctv.interiorTypes.turret = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
       document.getElementById('cctvInteriorBulletCount').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.cctv.interiorTypes.bullet = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
       document.getElementById('cctvExteriorBulletCount').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.cctv.exteriorTypes.bullet = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
       });
 
       document.getElementById('cctvAiCheckbox').addEventListener('change', (event) => {
         state.cctv.exteriorTypes.ai = event.target.checked;
+        notifyStateChange();
       });
 
-      document.querySelectorAll('input[name=\"resolution\"]').forEach((input) => {
+      document.querySelectorAll('input[name="resolution"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
-            state.cctv.resolution = input.value;
+            state.cctv.resolution = input.value.toUpperCase();
+            notifyStateChange();
           }
         });
       });
 
-      document.querySelectorAll('input[name=\"recordingMode\"]').forEach((input) => {
+      document.querySelectorAll('input[name="recordingMode"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
             state.cctv.mode = input.value;
+            notifyStateChange();
           }
         });
       });
 
-      function areaPerAp(density) {
-        const base = { faible: 200, moyenne: 130, elevee: 90 };
-        return base[density] || 130;
+      function baseRatioByEnvironment() {
+        const ratios = { bureau: 120, maison: 100, entrepot: 250, hotel: 30, exterieur: 500 };
+        return ratios[state.environment] || 120;
+      }
+
+      function densityFactor(density) {
+        return { faible: 1.2, moyenne: 1, elevee: 0.75 }[density] || 1;
       }
 
       function structureFactor(structure) {
-        return { cloisons: 1, murs: 0.85, metal: 0.75 }[structure] || 1;
+        return { cloisons: 1, murs: 0.85, metal: 0.7 }[structure] || 1;
       }
 
       function heightFactor(height) {
-        return { standard: 1, elevee: 0.92, tres: 0.82 }[height] || 1;
+        return { standard: 1, elevee: 0.95, tres: 1.15 }[height] || 1;
       }
 
       function computeAccessPoints() {
+        const base = baseRatioByEnvironment() * structureFactor(state.structure) * heightFactor(state.height);
         const zones = state.zones.length ? state.zones : [{ surface: state.surface, density: state.density }];
         let total = 0;
         zones.forEach((zone) => {
-          const area = areaPerAp(zone.density) * structureFactor(state.structure) * heightFactor(state.height);
-          const effective = Math.max(area, 45);
-          total += Math.ceil(zone.surface / effective);
+          const ratio = Math.max(35, base * densityFactor(zone.density || state.density));
+          total += Math.ceil(zone.surface / ratio);
         });
         return Math.max(total, 1);
       }
 
-      function pickApModel(apCount) {
-        if (state.environment === 'hotel') return 'EAP615-Wall (Wi-Fi 6 mural)';
-        if (state.environment === 'exterieur') return 'EAP610-Outdoor (Wi-Fi 6 extérieur)';
-        if (state.density === 'elevee' || state.services.haute_vitesse) return 'EAP690E HD (Wi-Fi 6E tri-bande)';
-        if (apCount >= 6) return 'EAP673 (Wi-Fi 6 double bande)';
-        return 'EAP650 (Wi-Fi 6)';
+      function pickApEntry(apCount) {
+        if (state.environment === 'hotel') return AP_MODELS.eap615;
+        if (state.environment === 'exterieur') return AP_MODELS.eap610Outdoor;
+        if (state.density === 'elevee' || state.services.haute_vitesse) return AP_MODELS.eap690;
+        if (apCount >= 6) return AP_MODELS.eap673;
+        if (state.density === 'faible') return AP_MODELS.eap610;
+        return AP_MODELS.eap650;
       }
 
-      function pickSwitch(totalPoEPorts, poeBudget) {
-        if (totalPoEPorts <= 8 && poeBudget <= 150) return 'TL-SG2210MP (8 ports PoE+, 150W)';
-        if (totalPoEPorts <= 16 && poeBudget <= 300) return 'TL-SG2428P (24 ports PoE+, 250W)';
-        if (totalPoEPorts <= 24 && poeBudget <= 380) return 'TL-SG3428MP (24 ports PoE+, 384W)';
-        return 'TL-SG3452XP (48 ports PoE++, 720W)';
-      }
-
-      function pickRouter(totalBandwidth) {
-        if (state.services.haute_vitesse || totalBandwidth > 1000) return 'ER7206 (Multi-Gigabit)';
-        if (totalBandwidth > 600) return 'ER707-M2 (Dual WAN 2.5G)';
-        return 'ER605 (Gigabit)';
+      function pickRouter(totalBandwidth, apEntry) {
+        if (state.services.haute_vitesse || totalBandwidth > 1000) {
+          return apEntry.multiGig ? ROUTERS.er7206 : ROUTERS.er8411;
+        }
+        if (totalBandwidth > 600) {
+          return ROUTERS.er7206;
+        }
+        return ROUTERS.er605;
       }
 
       function pickController(apCount, cameraCount) {
-        const devices = apCount + cameraCount;
-        if (devices > 20) return 'OC300 (contrôleur rack)';
-        return 'OC200 (contrôleur cloud)';
+        const devices = apCount + cameraCount + 1;
+        return devices > 25 ? CONTROLLERS.oc300 : CONTROLLERS.oc200;
       }
 
-      function computeSummary() {
+      function pickSwitch(poePorts, totalPorts, poeBudget, minSpeed) {
+        const candidates = SWITCHES.filter((sw) =>
+          sw.portsPoe >= poePorts && sw.portsTotal >= totalPorts && sw.budget >= poeBudget &&
+          (minSpeed === '10G' ? sw.ports10 > 0 : minSpeed === '2.5G' ? sw.ports25 > 0 || sw.ports10 > 0 : true)
+        );
+        return (candidates.length ? candidates : [SWITCHES[SWITCHES.length - 1]])[0];
+      }
+
+      function deriveCameraBom() {
+        if (!state.cctv.enabled) {
+          return { cameras: [], poe: 0, price: 0, count: 0 };
+        }
+        const entries = [];
+        const interiorMix = state.cctv.interiorTypes;
+        const totalInterior = Math.max(state.cctv.interior, 0);
+        const interiorTotalMix = Math.max(interiorMix.dome + interiorMix.turret + interiorMix.bullet, 1);
+        const scaleInterior = totalInterior / interiorTotalMix;
+        const domeQty = Math.round(interiorMix.dome * scaleInterior);
+        const turretQty = Math.round(interiorMix.turret * scaleInterior);
+        const bulletQty = Math.round(interiorMix.bullet * scaleInterior);
+        if (domeQty > 0) entries.push({ ...CAMERA_CATALOG.dome, quantite: domeQty });
+        if (turretQty > 0) entries.push({ ...CAMERA_CATALOG.turret, quantite: turretQty });
+        if (bulletQty > 0) entries.push({ ...CAMERA_CATALOG.interiorBullet, quantite: bulletQty });
+
+        const exteriorQty = Math.max(state.cctv.exterior, 0);
+        if (exteriorQty > 0) {
+          const aiCount = state.cctv.exteriorTypes.ai ? Math.max(1, Math.round(exteriorQty * 0.5)) : 0;
+          const classicCount = Math.max(exteriorQty - aiCount, 0);
+          if (classicCount > 0) entries.push({ ...CAMERA_CATALOG.exterior, quantite: classicCount });
+          if (aiCount > 0) entries.push({ ...CAMERA_CATALOG.exteriorAi, quantite: aiCount });
+        }
+
+        let poe = 0;
+        let price = 0;
+        let count = 0;
+        entries.forEach((camera) => {
+          poe += camera.poe * camera.quantite;
+          price += camera.prix * camera.quantite;
+          count += camera.quantite;
+        });
+
+        return { cameras: entries, poe, price, count };
+      }
+
+      function pickNvr(cameraCount) {
+        if (cameraCount === 0) {
+          return null;
+        }
+        return NVR_CATALOG.find((nvr) => nvr.canaux >= cameraCount) || NVR_CATALOG[NVR_CATALOG.length - 1];
+      }
+
+      function computeStorageTb(cameraCount, resolution, mode, retentionDays) {
+        if (cameraCount === 0) return 0;
+        const bitrate = { '1080P': 5, '4MP': 8, '8MP': 12 }[resolution] || 8;
+        const activityFactor = mode === 'mouvement' ? 0.3 : 1;
+        const storageMo = cameraCount * bitrate * 3600 * 24 * retentionDays * activityFactor / 8;
+        return storageMo / (1024 * 1024);
+      }
+
+      function pickStorageOption(requiredTb) {
+        if (requiredTb <= 0) return null;
+        return HDD_OPTIONS.find((option) => option.capacite >= requiredTb) || HDD_OPTIONS[HDD_OPTIONS.length - 1];
+      }
+
+      function buildBom() {
         const apCount = computeAccessPoints();
-        const apModel = pickApModel(apCount);
-        const cameraCount = state.cctv.enabled ? state.cctv.interior + state.cctv.exterior : 0;
-        const poePerAp = state.density === 'elevee' ? 22 : 18;
-        const poePerCamera = state.cctv.resolution === '8MP' ? 18 : state.cctv.resolution === '4MP' ? 12 : 9;
-        const poeBudget = apCount * poePerAp + cameraCount * poePerCamera;
-        const portsNeeded = apCount + cameraCount;
-        const switchModel = pickSwitch(portsNeeded, poeBudget * 1.2);
-        const totalBandwidthUsers = state.bandwidth.postes * state.bandwidth.mbpsParPoste;
-        const totalBandwidthCameras = state.bandwidth.cameras * state.bandwidth.mbpsParCamera;
-        const totalBandwidth = totalBandwidthUsers + totalBandwidthCameras;
-        const routerModel = pickRouter(totalBandwidth);
-        const controller = pickController(apCount, cameraCount);
-        const nvr = cameraCount ? (cameraCount > 8 ? 'VIGI NVR1108' : 'VIGI NVR1008H') : null;
-        const retentionDays = state.cctv.retention;
-        const resolution = state.cctv.resolution;
-        const recordingFactor = state.cctv.mode === 'continu' ? 1 : 0.45;
-        const bitrate = resolution === '8MP' ? 12 : resolution === '4MP' ? 8 : 5;
-        const storageTb = cameraCount ? ((cameraCount * bitrate * 0.125) * 24 * retentionDays * recordingFactor) / 1024 : 0;
-        const storageDisplay = storageTb ? `${storageTb.toFixed(2)} To estimés` : '—';
-        const poeProvided = switchModel.includes('3452') ? 720 : switchModel.includes('3428') ? 384 : switchModel.includes('2428') ? 250 : 150;
-        const consumption = apCount * 15 + cameraCount * 12 + (poeProvided * 0.1) + 25;
-        const annualCost = (consumption * 24 * 365 / 1000) * 0.25;
+        const apEntry = pickApEntry(apCount);
+        const cameraResult = deriveCameraBom();
+        const cameraCount = cameraResult.count;
+        const poePerAp = apEntry.poe;
+        const poeBudgetDevices = apCount * poePerAp + cameraResult.poe;
+        const poeBudgetRequired = Math.ceil(poeBudgetDevices * 1.2);
+        const uplinks = 1 + (cameraCount > 0 ? 1 : 0);
+        const totalPoePorts = apCount + cameraCount;
+        const totalPorts = totalPoePorts + uplinks + Math.ceil(totalPoePorts * 0.25);
+        const bandwidthUsers = state.bandwidth.postes * state.bandwidth.mbpsParPoste;
+        const bandwidthVideo = state.bandwidth.cameras * state.bandwidth.mbpsParCamera;
+        const bandwidthTotal = bandwidthUsers + bandwidthVideo;
+        const routerEntry = pickRouter(bandwidthTotal, apEntry);
+        const minSpeed = routerEntry === ROUTERS.er8411 ? '10G' : state.services.haute_vitesse || apEntry.multiGig ? '2.5G' : '1G';
+        const switchEntry = pickSwitch(totalPoePorts, totalPorts, poeBudgetRequired, minSpeed);
+        const controllerEntry = pickController(apCount, cameraCount);
+        const nvrEntry = pickNvr(cameraCount);
+        const storageTb = computeStorageTb(cameraCount, state.cctv.resolution, state.cctv.mode, state.cctv.retention);
+        const storageOption = pickStorageOption(storageTb);
+        const modulesSfp = routerEntry.sfpPlus && switchEntry.ports10 > 0 ? [{ modele: 'TXM431-SR', sku: 'TXM431SR', quantite: 2, prix: 99 }] : [];
+
+        const prixTotal =
+          apCount * apEntry.prix +
+          switchEntry.prix +
+          routerEntry.prix +
+          controllerEntry.prix +
+          cameraResult.price +
+          (nvrEntry ? nvrEntry.prix : 0) +
+          (storageOption ? storageOption.prix : 0) +
+          modulesSfp.reduce((sum, item) => sum + item.prix, 0);
+
+        const consoAps = apCount * apEntry.poe;
+        const consoCameras = cameraResult.poe;
+        const consoSwitch = switchEntry.idle;
+        const consoRouter = routerEntry.conso;
+        const consoController = controllerEntry.conso;
+        const consoNvr = nvrEntry ? nvrEntry.conso : 0;
+        const consoTotale = consoAps + consoCameras + consoSwitch + consoRouter + consoController + consoNvr;
+        const opexKwh = (consoTotale / 1000) * 24 * 365;
+        const opexEuros = opexKwh * 0.25;
+
         return {
-          hardware: [
-            `${apCount} × ${apModel}`,
-            `${switchModel} (ports PoE requis : ${portsNeeded})`,
-            `${routerModel}`,
-            controller,
-            cameraCount ? `${cameraCount} × Caméras VIGI (${resolution})` : null,
-            nvr,
-            cameraCount ? `Stockage recommandé : ${storageDisplay}` : null,
-          ].filter(Boolean),
-          metrics: [
-            `Budget PoE requis : ${poeBudget.toFixed(0)} W`,
-            `Budget PoE disponible : ${poeProvided} W`,
-            `Consommation estimée : ${consumption.toFixed(0)} W`,
-            `Coût annuel (0,25 €/kWh) : ${annualCost.toFixed(0)} €`,
-            `Bande passante agrégée : ${totalBandwidth.toFixed(0)} Mbps`,
-          ],
-          services: [
-            state.services.invites ? 'VLAN Invités isolé + portail captif' : null,
-            state.services.voip ? 'QoS prioritaire VoIP' : null,
-            state.services.iot ? 'Segment IoT dédié et ACL restrictives' : null,
-            state.services.haute_vitesse ? 'Backbone multi-gigabit recommandé' : null,
-            state.security.filtrage ? 'Filtrage MAC / 802.1X' : null,
-            state.security.portail ? 'Portail captif avancé avec vouchers' : null,
-            `Priorités QoS : ${state.qosOrder.map((key) => qosItems.find((item) => item.key === key)?.label).filter(Boolean).join(' → ')}`,
-          ].filter(Boolean),
+          aps: { ...apEntry, quantite: apCount },
+          switch: { ...switchEntry },
+          routeur: { ...routerEntry },
+          controleur: { ...controllerEntry },
+          modules: modulesSfp,
+          cameras: cameraResult.cameras,
+          nvr: nvrEntry,
+          stockage: storageOption ? { ...storageOption, requis: storageTb } : null,
+          synthese: {
+            poeRequis: poeBudgetRequired,
+            poeDispo: switchEntry.budget,
+            consoTotale,
+            opexKwh,
+            opexEuros,
+            bandePassante: bandwidthTotal,
+            prixTotal,
+          },
         };
       }
 
+      function summaryServices() {
+        const items = [];
+        if (state.services.invites) items.push('VLAN invités isolé + portail captif');
+        if (state.services.voip) items.push('QoS prioritaire VoIP');
+        if (state.services.iot) items.push('Segment IoT dédié et ACL restrictives');
+        if (state.services.haute_vitesse) items.push('Backbone multi-gigabit recommandé');
+        if (state.security.isolation) items.push('Client isolation activée');
+        if (state.security.filtrage) items.push('Filtrage MAC / 802.1X envisagé');
+        if (state.security.portail) items.push('Portail captif avancé avec vouchers');
+        items.push(`Priorités QoS : ${state.qosOrder.map((key) => qosItems.find((item) => item.key === key)?.label).filter(Boolean).join(' → ')}`);
+        return items;
+      }
+
       function renderSummary() {
-        const summary = computeSummary();
+        const bom = buildBom();
         const hardwareList = document.getElementById('hardwareList');
         const metricsList = document.getElementById('metricsList');
         const serviceList = document.getElementById('serviceList');
-        hardwareList.innerHTML = summary.hardware.map((item) => `<li>${item}</li>`).join('');
-        metricsList.innerHTML = summary.metrics.map((item) => `<li>${item}</li>`).join('');
-        serviceList.innerHTML = summary.services.map((item) => `<li>${item}</li>`).join('');
+
+        const hardwareLines = [
+          `${bom.aps.quantite} × ${bom.aps.modele} (${bom.aps.sku})`,
+          `${bom.switch.modele} · ${bom.switch.portsPoe} ports PoE / ${bom.switch.budget} W`,
+          `${bom.routeur.modele} (${bom.routeur.sku})`,
+          `${bom.controleur.modele} (${bom.controleur.sku})`,
+        ];
+
+        bom.cameras.forEach((cam) => {
+          hardwareLines.push(`${cam.quantite} × ${cam.modele}`);
+        });
+        if (bom.nvr) {
+          hardwareLines.push(`${bom.nvr.modele} (${bom.nvr.sku})`);
+        }
+        if (bom.stockage) {
+          hardwareLines.push(`HDD surveillance ${bom.stockage.capacite} To (besoin ${bom.stockage.requis.toFixed(2)} To)`);
+        }
+        bom.modules.forEach((module) => {
+          hardwareLines.push(`${module.quantite} × ${module.modele}`);
+        });
+
+        const metricsLines = [
+          `Budget PoE requis : ${numberFormat.format(bom.synthese.poeRequis)} W`,
+          `Budget PoE disponible : ${numberFormat.format(bom.synthese.poeDispo)} W`,
+          `Consommation totale estimée : ${numberFormat.format(bom.synthese.consoTotale)} W`,
+          `OPEX annuel : ${numberFormat.format(bom.synthese.opexKwh)} kWh · ${euros.format(bom.synthese.opexEuros)}`,
+          `Bande passante agrégée : ${numberFormat.format(bom.synthese.bandePassante)} Mbps`,
+          `Investissement estimé (HT) : ${euros.format(bom.synthese.prixTotal)}`,
+        ];
+
+        const servicesLines = summaryServices();
+
+        hardwareList.innerHTML = hardwareLines.map((item) => `<li>${item}</li>`).join('');
+        metricsList.innerHTML = metricsLines.map((item) => `<li>${item}</li>`).join('');
+        serviceList.innerHTML = servicesLines.map((item) => `<li>${item}</li>`).join('');
       }
 
       renderQosList();
       updateProgress();
     </script>
+
   </body>
 </html>
 """

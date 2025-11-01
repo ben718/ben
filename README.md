@@ -5,7 +5,9 @@ Ce dépôt contient deux éléments principaux :
 * un utilitaire Python pour analyser des dates ISO 8601 avec quelques
   tolérances supplémentaires (`src/datetime_utils.py`) ;
 * une mini application web WSGI sans dépendance externe (`src/webapp.py`)
-  qui sert une page d'accueil prête à l'emploi.
+  qui sert un configurateur OmadaBOM interactif en quatre étapes
+  (capture Simple/Avancée, calcul dynamique de la BOM, indicateurs PoE et
+  OPEX).
 
 ## Lancer le site
 
