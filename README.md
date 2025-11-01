@@ -27,6 +27,19 @@ utiliser le configurateur. Le moteur Python situé derrière `/api/generate`
 alimente la synthèse affichée à l'écran, et l'endpoint `/api/download`
 retourne une archive ZIP contenant les livrables.
 
+### Publier et tester via GitHub Pages
+
+Pour partager rapidement la maquette directement depuis Git :
+
+1. Poussez votre code sur GitHub.
+2. Dans le dépôt, ouvrez **Settings → Pages**.
+3. Dans la section **Source**, choisissez la branche **`main`** ou **`docs`**,
+   puis validez.
+
+GitHub Pages déploiera automatiquement le site sur une URL publique en quelques
+instants, ce qui vous permet de tester la démo sans configuration
+supplémentaire.
+
 La page d'accueil affiche automatiquement la branche et le dernier commit
 Git détectés, ainsi qu'une courte liste des derniers commits disponibles pour
 offrir un aperçu visuel de l'activité récente. Si aucune information n'apparaît,

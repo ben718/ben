@@ -156,6 +156,29 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         line-height: 1.5;
       }
 
+      .pages-hint {
+        margin-top: 0.75rem;
+        padding: 1.1rem 1.4rem;
+        border-radius: 18px;
+        border: 1px dashed rgba(37, 99, 235, 0.35);
+        background: rgba(37, 99, 235, 0.12);
+        font-size: 0.95rem;
+        line-height: 1.55;
+      }
+
+      .pages-hint strong {
+        display: block;
+        margin-bottom: 0.4rem;
+      }
+
+      .pages-hint code {
+        background: rgba(15, 23, 42, 0.08);
+        padding: 0.1rem 0.4rem;
+        border-radius: 8px;
+        font-family: 'Fira Code', 'Source Code Pro', monospace;
+        font-size: 0.85rem;
+      }
+
       .progress {
         display: flex;
         align-items: center;
@@ -529,6 +552,10 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <p>Découvrez le parcours hybride Simple/Avancé d'OmadaBOM pour traduire vos besoins en une configuration réseau professionnelle, entièrement personnalisable.</p>
         </div>
         <div class=\"git-info\">{{GIT_METADATA}}</div>
+        <div class=\"pages-hint\">
+          <strong>Tester depuis GitHub Pages</strong>
+          <p style=\"margin:0;\">Dans GitHub, ouvrez <em>Settings → Pages</em> puis, dans la section <em>Source</em>, sélectionnez la branche <code>main</code> ou <code>docs</code>. Validez pour publier automatiquement cette démo.</p>
+        </div>
         {{GIT_HISTORY}}
       </header>
 

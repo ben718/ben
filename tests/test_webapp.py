@@ -72,6 +72,8 @@ def test_homepage_paths_return_success(path: str) -> None:
     assert "data-step=\"1\"" in html
     assert "id=\"hardwareList\"" in html
     assert "Téléchargez votre dossier professionnel" in html
+    assert "Tester depuis GitHub" in html
+    assert "Settings → Pages" in html
     assert git_snippet in html
     assert history_snippet in html
     assert GIT_PLACEHOLDER not in html
