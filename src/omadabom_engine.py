@@ -133,6 +133,8 @@ HDD_OPTIONS: Sequence[StorageOption] = (
     StorageOption(16, 369),
 )
 
+MAX_SURFACE_M2 = 50_000
+
 
 QOS_LABELS = {
     "voip": "Téléphonie (VoIP)",
@@ -170,6 +172,41 @@ def _safe_number(value: object, default: float = 0.0) -> float:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _validate_payload(payload: dict) -> None:
+    if not isinstance(payload, dict):
+        raise ValueError("Données de configuration invalides.")
+
+    zones = payload.get("zones") or []
+    if zones:
+        has_positive_zone = any(_safe_number(zone.get("surface")) > 0 for zone in zones)
+        if not has_positive_zone:
+            raise ValueError("Chaque zone doit posséder une surface positive.")
+        total_surface = sum(max(_safe_number(zone.get("surface")), 0.0) for zone in zones)
+    else:
+        total_surface = _safe_number(payload.get("surface"))
+        if total_surface <= 0:
+            raise ValueError("La surface totale doit être supérieure à 0 m².")
+
+    if total_surface > MAX_SURFACE_M2:
+        raise ValueError("La surface totale dépasse la limite prise en charge (50 000 m²).")
+
+    cctv = payload.get("cctv") or {}
+    if cctv.get("enabled"):
+        interior = max(_safe_number(cctv.get("interior")), 0.0)
+        exterior = max(_safe_number(cctv.get("exterior")), 0.0)
+        if interior + exterior <= 0:
+            raise ValueError("Activez au moins une caméra si la vidéosurveillance est activée.")
+        retention = _safe_number(cctv.get("retention"))
+        if retention <= 0:
+            raise ValueError("La durée de rétention doit être supérieure à zéro.")
+        resolution = str(cctv.get("resolution") or "").upper()
+        if resolution not in {"1080P", "4MP", "8MP"}:
+            raise ValueError("Résolution de caméra inconnue.")
+        mode = str(cctv.get("mode") or "").lower()
+        if mode not in {"continu", "mouvement"}:
+            raise ValueError("Mode d'enregistrement inconnu.")
 
 
 def _compute_access_points(payload: dict) -> int:
@@ -388,6 +425,8 @@ def _services_summary(payload: dict) -> List[str]:
 
 def generate_plan(payload: dict) -> dict:
     """Compute the full bill of materials and human readable summary."""
+
+    _validate_payload(payload)
 
     ap_count = _compute_access_points(payload)
     ap_entry = _pick_access_point(payload, ap_count)

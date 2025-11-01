@@ -136,6 +136,12 @@ SAMPLE_STATE = {
 }
 
 
+def _sample_payload(**overrides: object) -> dict:
+    payload = json.loads(json.dumps(SAMPLE_STATE))
+    payload.update(overrides)
+    return payload
+
+
 def test_generate_api_returns_plan() -> None:
     payload = json.dumps(SAMPLE_STATE).encode("utf-8")
     response = _invoke_app("/api/generate", method="POST", body=payload)
@@ -155,3 +161,36 @@ def test_download_api_returns_zip_archive() -> None:
     with ZipFile(archive) as zf:
         names = set(zf.namelist())
         assert {"bom.csv", "synthese.txt", "portmap.txt", "plan_vlan.txt"}.issubset(names)
+
+
+def test_generate_api_rejects_invalid_surface() -> None:
+    payload = _sample_payload(surface=0, zones=[])
+    response = _invoke_app(
+        "/api/generate",
+        method="POST",
+        body=json.dumps(payload).encode("utf-8"),
+    )
+    assert response.status == "400 Bad Request"
+    data = json.loads(response.body.decode("utf-8"))
+    assert "surface" in data["error"].lower()
+
+
+def test_download_api_rejects_invalid_cctv() -> None:
+    payload = _sample_payload(
+        cctv={
+            "enabled": True,
+            "interior": 0,
+            "exterior": 0,
+            "retention": 15,
+            "resolution": "4MP",
+            "mode": "continu",
+        }
+    )
+    response = _invoke_app(
+        "/api/download",
+        method="POST",
+        body=json.dumps(payload).encode("utf-8"),
+    )
+    assert response.status == "400 Bad Request"
+    data = json.loads(response.body.decode("utf-8"))
+    assert "caméra" in data["error"].lower()

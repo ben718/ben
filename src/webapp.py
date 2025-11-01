@@ -1252,10 +1252,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(serializeState()),
           });
+          const payloadText = await response.text();
+          const trimmedPayload = payloadText.trim();
           if (!response.ok) {
-            throw new Error('Réponse serveur invalide');
+            let message = 'Réponse serveur invalide';
+            if (trimmedPayload) {
+              try {
+                const parsed = JSON.parse(trimmedPayload);
+                message = parsed.error || message;
+              } catch (parseError) {
+                message = trimmedPayload;
+              }
+            }
+            throw new Error(message);
           }
-          const data = await response.json();
+          const data = trimmedPayload ? JSON.parse(trimmedPayload) : {};
           lastPlan = data;
           hardwareList.innerHTML = (data.hardware || []).map((item) => `<li>${item}</li>`).join('') || '<li>Aucune recommandation.</li>';
           metricsList.innerHTML = (data.metrics || []).map((item) => `<li>${item}</li>`).join('');
@@ -1284,7 +1295,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             body: JSON.stringify(serializeState()),
           });
           if (!response.ok) {
-            throw new Error('Téléchargement indisponible');
+            const payloadText = await response.text();
+            const trimmedPayload = payloadText.trim();
+            let message = 'Téléchargement indisponible';
+            if (trimmedPayload) {
+              try {
+                const parsed = JSON.parse(trimmedPayload);
+                message = parsed.error || message;
+              } catch (parseError) {
+                message = trimmedPayload;
+              }
+            }
+            throw new Error(message);
           }
           const blob = await response.blob();
           const url = URL.createObjectURL(blob);

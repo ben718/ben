@@ -40,3 +40,6 @@ pytest
 * API prête à intégrer : les clients peuvent exploiter `/api/generate`
   (JSON -> JSON) et `/api/download` (JSON -> ZIP) pour alimenter d'autres
   frontends.
+* Validations serveur : les incohérences (surface nulle, vidéosurveillance
+  sans caméras, résolution inconnue…) retournent des erreurs explicites
+  afin de guider la saisie et garantir un dimensionnement réaliste.
