@@ -840,7 +840,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           <ul id=\"serviceList\"></ul>
         </div>
         <div class=\"download-box\">
-          <strong>Téléchargez votre dossier professionnel :</strong> BOM détaillée, plan VLAN/IP, port-map, synthèse technique.
+          <strong>Téléchargez votre dossier professionnel :</strong> BOM détaillée (CSV + PDF), plan VLAN/IP et port-map (TXT + PDF), synthèse technique.
           <button class=\"cta\" type=\"button\" id=\"downloadButton\">Télécharger le ZIP</button>
           <p id=\"downloadHint\" style=\"margin-top:0.75rem;font-weight:500;\">Le dossier se calcule depuis le moteur Python embarqué.</p>
         </div>

@@ -1,16 +1,19 @@
-"""Core rule engine powering the OmadaBOM configurator.
+"""Core rule engine powering the OmadaBOM configurateur.
 
-This module contains a compact catalogue of TP-Link Omada equipments and a
-deterministic rule engine that transforms the user inputs collected by the
-front-end into a bill of materials.  The same data is also used to produce the
-documents bundled in the downloadable archive exposed by the WSGI layer.
+The module now relies on an external catalogue (JSON file) that can be refreshed
+without touching the Python code.  The rule engine reads it on demand, caches it
+and recomputes the bill of materials, the downloadable archive (CSV + PDF) and
+all metrics presented in the UI.
 """
 
 from __future__ import annotations
 
+import json
+import os
 from dataclasses import dataclass
 from io import BytesIO, StringIO
 from math import ceil
+from pathlib import Path
 from typing import Dict, Iterable, List, Sequence
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -79,59 +82,138 @@ class StorageOption:
     prix: int
 
 
-AP_CATALOG: Dict[str, AccessPoint] = {
-    "eap610": AccessPoint("TP-Link EAP610", "EAP610", poe=14, prix=129),
-    "eap650": AccessPoint("TP-Link EAP650", "EAP650", poe=18, prix=189),
-    "eap673": AccessPoint("TP-Link EAP673", "EAP673", poe=19, prix=239, multi_gig=True),
-    "eap690": AccessPoint("TP-Link EAP690E HD", "EAP690EHD", poe=23, prix=479, multi_gig=True),
-    "eap615": AccessPoint("TP-Link EAP615-Wall", "EAP615WALL", poe=13, prix=139),
-    "eap610_outdoor": AccessPoint("TP-Link EAP610-Outdoor", "EAP610OUT", poe=16, prix=219),
-}
+@dataclass(frozen=True)
+class Catalogue:
+    """Container loading the equipment list from ``data/catalogue.json``."""
+
+    access_points: Dict[str, AccessPoint]
+    switches: Sequence[Switch]
+    routers: Dict[str, Router]
+    controllers: Dict[str, Controller]
+    cameras: Dict[str, Camera]
+    nvrs: Sequence[NVR]
+    storage: Sequence[StorageOption]
+    source: Path
+
+    @classmethod
+    def from_dict(cls, payload: dict, *, source: Path) -> "Catalogue":
+        try:
+            aps = {
+                entry["id"]: AccessPoint(
+                    entry["modele"],
+                    entry["sku"],
+                    poe=int(entry["poe"]),
+                    prix=int(entry["prix"]),
+                    multi_gig=bool(entry.get("multi_gig", False)),
+                )
+                for entry in payload["access_points"]
+            }
+            switches = [
+                Switch(
+                    entry["modele"],
+                    entry["sku"],
+                    ports_total=int(entry["ports_total"]),
+                    ports_poe=int(entry["ports_poe"]),
+                    budget=int(entry["budget"]),
+                    prix=int(entry["prix"]),
+                    ports_2_5g=int(entry.get("ports_2_5g", 0)),
+                    ports_10g=int(entry.get("ports_10g", 0)),
+                    idle_w=int(entry.get("idle_w", 35)),
+                )
+                for entry in payload["switches"]
+            ]
+            routers = {
+                entry["id"]: Router(
+                    entry["modele"],
+                    entry.get("sku", entry["id"].upper()),
+                    prix=int(entry["prix"]),
+                    conso=int(entry.get("conso", 18)),
+                    sfp_plus=bool(entry.get("sfp_plus", False)),
+                )
+                for entry in payload["routers"]
+            }
+            controllers = {
+                entry["id"]: Controller(
+                    entry["modele"],
+                    entry.get("sku", entry["id"].upper()),
+                    prix=int(entry["prix"]),
+                    conso=int(entry.get("conso", 12)),
+                )
+                for entry in payload["controllers"]
+            }
+            cameras = {
+                entry["id"]: Camera(
+                    entry["modele"],
+                    entry["sku"],
+                    prix=int(entry["prix"]),
+                    poe=int(entry.get("poe", 0)),
+                )
+                for entry in payload["cameras"]
+            }
+            nvrs = [
+                NVR(
+                    entry["modele"],
+                    entry["sku"],
+                    canaux=int(entry["canaux"]),
+                    prix=int(entry["prix"]),
+                    conso=int(entry.get("conso", 20)),
+                )
+                for entry in payload["nvrs"]
+            ]
+            storage = [
+                StorageOption(int(entry["capacite"]), int(entry["prix"]))
+                for entry in payload["storage"]
+            ]
+        except (KeyError, TypeError, ValueError) as exc:  # pragma: no cover - defensive
+            raise ValueError(
+                "Catalogue invalide – vérifiez la structure de data/catalogue.json"
+            ) from exc
+
+        if not aps or not switches or not routers or not controllers:
+            raise ValueError("Catalogue incomplet : équipements essentiels manquants.")
+
+        return cls(aps, switches, routers, controllers, cameras, nvrs, storage, source)
 
 
-SWITCH_CATALOG: Sequence[Switch] = (
-    Switch("TL-SG2210MP", "TLSG2210MP", ports_total=10, ports_poe=8, budget=150, prix=229, idle_w=20),
-    Switch("TL-SG2428P", "TLSG2428P", ports_total=28, ports_poe=24, budget=250, prix=329, idle_w=32),
-    Switch("TL-SG3428MP", "TLSG3428MP", ports_total=28, ports_poe=24, budget=384, prix=549, ports_10g=2, idle_w=45),
-    Switch("TL-SG3452XP", "TLSG3452XP", ports_total=52, ports_poe=48, budget=720, prix=899, ports_2_5g=4, ports_10g=4, idle_w=60),
-)
+CATALOG_ENV_VAR = "OMADABOM_CATALOGUE_PATH"
+DEFAULT_CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "catalogue.json"
+
+_CATALOGUE_OVERRIDE: Path | None = None
+_CATALOGUE_CACHE: tuple[float, Catalogue] | None = None
 
 
-ROUTER_CATALOG: Dict[str, Router] = {
-    "er605": Router("ER605", "ER605", prix=119, conso=18),
-    "er7206": Router("ER7206", "ER7206", prix=259, conso=22),
-    "er8411": Router("ER8411", "ER8411", prix=549, conso=28, sfp_plus=True),
-}
+def set_catalogue_path(path: Path | str | None) -> None:
+    """Override the catalogue location (used by tests or admin tooling)."""
+
+    global _CATALOGUE_OVERRIDE, _CATALOGUE_CACHE
+    _CATALOGUE_OVERRIDE = Path(path) if path is not None else None
+    _CATALOGUE_CACHE = None
 
 
-CONTROLLER_CATALOG: Dict[str, Controller] = {
-    "oc200": Controller("OC200", "OC200", prix=129, conso=12),
-    "oc300": Controller("OC300", "OC300", prix=269, conso=18),
-}
+def _catalogue_path() -> Path:
+    if _CATALOGUE_OVERRIDE is not None:
+        return _CATALOGUE_OVERRIDE
+    env_path = os.environ.get(CATALOG_ENV_VAR)
+    if env_path:
+        return Path(env_path)
+    return DEFAULT_CATALOG_PATH
 
 
-CAMERA_CATALOG: Dict[str, Camera] = {
-    "dome": Camera("VIGI C440 (Dôme intérieur)", "VIGIC440", prix=159, poe=11),
-    "turret": Camera("VIGI C240 (Turret intérieur)", "VIGIC240", prix=129, poe=9),
-    "interior_bullet": Camera("VIGI C340 (Bullet intérieur)", "VIGIC340", prix=179, poe=12),
-    "exterior": Camera("VIGI C340 (Bullet extérieur)", "VIGIC340EXT", prix=199, poe=14),
-    "exterior_ai": Camera("VIGI C340S (Bullet IA)", "VIGIC340S", prix=249, poe=16),
-}
+def _load_catalogue(path: Path) -> Catalogue:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return Catalogue.from_dict(payload, source=path)
 
 
-NVR_CATALOG: Sequence[NVR] = (
-    NVR("VIGI NVR1008H", "VIGINVR1008H", canaux=8, prix=199, conso=18),
-    NVR("VIGI NVR1108", "VIGINVR1108", canaux=12, prix=249, conso=20),
-    NVR("VIGI NVR1216", "VIGINVR1216", canaux=16, prix=399, conso=24),
-)
-
-
-HDD_OPTIONS: Sequence[StorageOption] = (
-    StorageOption(2, 119),
-    StorageOption(4, 149),
-    StorageOption(8, 229),
-    StorageOption(16, 369),
-)
+def _get_catalogue() -> Catalogue:
+    global _CATALOGUE_CACHE
+    path = _catalogue_path()
+    mtime = path.stat().st_mtime
+    if _CATALOGUE_CACHE and _CATALOGUE_CACHE[0] == mtime:
+        return _CATALOGUE_CACHE[1]
+    catalogue = _load_catalogue(path)
+    _CATALOGUE_CACHE = (mtime, catalogue)
+    return catalogue
 
 MAX_SURFACE_M2 = 50_000
 
@@ -236,21 +318,21 @@ def _compute_access_points(payload: dict) -> int:
     return max(total, 1)
 
 
-def _pick_access_point(payload: dict, ap_count: int) -> AccessPoint:
+def _pick_access_point(payload: dict, ap_count: int, catalogue: Catalogue) -> AccessPoint:
     environment = payload.get("environment")
     density = payload.get("density")
     services = payload.get("services") or {}
     if environment == "hotel":
-        return AP_CATALOG["eap615"]
+        return catalogue.access_points["eap615"]
     if environment == "exterieur":
-        return AP_CATALOG["eap610_outdoor"]
+        return catalogue.access_points["eap610_outdoor"]
     if density == "elevee" or services.get("haute_vitesse"):
-        return AP_CATALOG["eap690"]
+        return catalogue.access_points["eap690"]
     if ap_count >= 6:
-        return AP_CATALOG["eap673"]
+        return catalogue.access_points["eap673"]
     if density == "faible":
-        return AP_CATALOG["eap610"]
-    return AP_CATALOG["eap650"]
+        return catalogue.access_points["eap610"]
+    return catalogue.access_points["eap650"]
 
 
 def _compute_bandwidth(payload: dict) -> dict[str, float]:
@@ -265,19 +347,20 @@ def _compute_bandwidth(payload: dict) -> dict[str, float]:
     }
 
 
-def _pick_router(payload: dict, total_bandwidth: float, ap: AccessPoint) -> Router:
+def _pick_router(payload: dict, total_bandwidth: float, ap: AccessPoint, catalogue: Catalogue) -> Router:
     services = payload.get("services") or {}
     high_speed = services.get("haute_vitesse") or total_bandwidth > 1000
     if high_speed:
-        return ROUTER_CATALOG["er7206" if ap.multi_gig else "er8411"]
+        key = "er7206" if ap.multi_gig else "er8411"
+        return catalogue.routers[key]
     if total_bandwidth > 600:
-        return ROUTER_CATALOG["er7206"]
-    return ROUTER_CATALOG["er605"]
+        return catalogue.routers["er7206"]
+    return catalogue.routers["er605"]
 
 
-def _pick_controller(ap_count: int, camera_count: int) -> Controller:
+def _pick_controller(ap_count: int, camera_count: int, catalogue: Catalogue) -> Controller:
     devices = ap_count + camera_count + 1
-    return CONTROLLER_CATALOG["oc300" if devices > 25 else "oc200"]
+    return catalogue.controllers["oc300" if devices > 25 else "oc200"]
 
 
 def _pick_switch(
@@ -285,6 +368,7 @@ def _pick_switch(
     camera_count: int,
     poe_budget_required: float,
     min_speed: str,
+    catalogue: Catalogue,
 ) -> Switch:
     poe_ports = ap_count + camera_count
     uplinks = 1 + (1 if camera_count > 0 else 0)
@@ -292,7 +376,7 @@ def _pick_switch(
 
     candidates = [
         switch
-        for switch in SWITCH_CATALOG
+        for switch in catalogue.switches
         if switch.ports_poe >= poe_ports
         and switch.ports_total >= ports_total
         and switch.budget >= poe_budget_required
@@ -303,10 +387,10 @@ def _pick_switch(
         )
     ]
 
-    return (candidates or [SWITCH_CATALOG[-1]])[0]
+    return (candidates or [catalogue.switches[-1]])[0]
 
 
-def _derive_cameras(payload: dict) -> dict:
+def _derive_cameras(payload: dict, catalogue: Catalogue) -> dict:
     cctv = payload.get("cctv") or {}
     if not cctv.get("enabled"):
         return {"entries": [], "poe": 0.0, "price": 0.0, "count": 0}
@@ -325,11 +409,11 @@ def _derive_cameras(payload: dict) -> dict:
     turret_qty = round(_safe_number(interior_mix.get("turret")) * scale)
     bullet_qty = round(_safe_number(interior_mix.get("bullet")) * scale)
     if dome_qty > 0:
-        entries.append({"item": CAMERA_CATALOG["dome"], "quantite": dome_qty})
+        entries.append({"item": catalogue.cameras["dome"], "quantite": dome_qty})
     if turret_qty > 0:
-        entries.append({"item": CAMERA_CATALOG["turret"], "quantite": turret_qty})
+        entries.append({"item": catalogue.cameras["turret"], "quantite": turret_qty})
     if bullet_qty > 0:
-        entries.append({"item": CAMERA_CATALOG["interior_bullet"], "quantite": bullet_qty})
+        entries.append({"item": catalogue.cameras["interior_bullet"], "quantite": bullet_qty})
 
     exterior_total = max(_safe_number(cctv.get("exterior")), 0.0)
     if exterior_total > 0:
@@ -338,9 +422,9 @@ def _derive_cameras(payload: dict) -> dict:
         ai_qty = max(1, round(exterior_total * 0.5)) if ai_enabled else 0
         classic_qty = max(round(exterior_total) - ai_qty, 0)
         if classic_qty > 0:
-            entries.append({"item": CAMERA_CATALOG["exterior"], "quantite": classic_qty})
+            entries.append({"item": catalogue.cameras["exterior"], "quantite": classic_qty})
         if ai_qty > 0:
-            entries.append({"item": CAMERA_CATALOG["exterior_ai"], "quantite": ai_qty})
+            entries.append({"item": catalogue.cameras["exterior_ai"], "quantite": ai_qty})
 
     poe = 0.0
     price = 0.0
@@ -365,13 +449,13 @@ def _derive_cameras(payload: dict) -> dict:
     return {"entries": normalized, "poe": poe, "price": price, "count": count}
 
 
-def _pick_nvr(camera_count: int) -> NVR | None:
+def _pick_nvr(camera_count: int, catalogue: Catalogue) -> NVR | None:
     if camera_count <= 0:
         return None
-    for candidate in NVR_CATALOG:
+    for candidate in catalogue.nvrs:
         if candidate.canaux >= camera_count:
             return candidate
-    return NVR_CATALOG[-1]
+    return catalogue.nvrs[-1]
 
 
 def _compute_storage_tb(camera_count: int, resolution: str | None, mode: str | None, retention: float) -> float:
@@ -384,13 +468,13 @@ def _compute_storage_tb(camera_count: int, resolution: str | None, mode: str | N
     return storage_mo / (1024 * 1024)
 
 
-def _pick_storage(required_tb: float) -> StorageOption | None:
+def _pick_storage(required_tb: float, catalogue: Catalogue) -> StorageOption | None:
     if required_tb <= 0:
         return None
-    for option in HDD_OPTIONS:
+    for option in catalogue.storage:
         if option.capacite >= required_tb:
             return option
-    return HDD_OPTIONS[-1]
+    return catalogue.storage[-1]
 
 
 def _services_summary(payload: dict) -> List[str]:
@@ -429,8 +513,10 @@ def generate_plan(payload: dict) -> dict:
     _validate_payload(payload)
 
     ap_count = _compute_access_points(payload)
-    ap_entry = _pick_access_point(payload, ap_count)
-    cameras = _derive_cameras(payload)
+    catalogue = _get_catalogue()
+
+    ap_entry = _pick_access_point(payload, ap_count, catalogue)
+    cameras = _derive_cameras(payload, catalogue)
     camera_count = cameras["count"]
 
     poe_budget_devices = ap_count * ap_entry.poe + cameras["poe"]
@@ -438,11 +524,17 @@ def generate_plan(payload: dict) -> dict:
 
     bandwidth = _compute_bandwidth(payload)
     total_bandwidth = bandwidth["users"] + bandwidth["video"]
-    router_entry = _pick_router(payload, total_bandwidth, ap_entry)
+    router_entry = _pick_router(payload, total_bandwidth, ap_entry, catalogue)
     min_speed = "10G" if router_entry.sfp_plus else "2.5G" if (payload.get("services", {}).get("haute_vitesse") or ap_entry.multi_gig) else "1G"
-    switch_entry = _pick_switch(ap_count, camera_count, poe_budget_required, min_speed)
-    controller_entry = _pick_controller(ap_count, camera_count)
-    nvr_entry = _pick_nvr(camera_count)
+    switch_entry = _pick_switch(
+        ap_count,
+        camera_count,
+        poe_budget_required,
+        min_speed,
+        catalogue,
+    )
+    controller_entry = _pick_controller(ap_count, camera_count, catalogue)
+    nvr_entry = _pick_nvr(camera_count, catalogue)
 
     cctv = payload.get("cctv") or {}
     storage_tb = _compute_storage_tb(
@@ -451,7 +543,7 @@ def generate_plan(payload: dict) -> dict:
         cctv.get("mode"),
         _safe_number(cctv.get("retention"), 0),
     )
-    storage_option = _pick_storage(storage_tb)
+    storage_option = _pick_storage(storage_tb, catalogue)
 
     modules = []
     if router_entry.sfp_plus and switch_entry.ports_10g > 0:
@@ -680,19 +772,100 @@ def _format_vlan_plan(plan: dict) -> str:
     ) + "\n"
 
 
+def _pdf_escape(text: str) -> str:
+    return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+
+def _render_pdf(title: str, lines: Sequence[str]) -> bytes:
+    """Generate a minimal single-page PDF using Helvetica without dependencies."""
+
+    content_lines = [title] + list(lines)
+    operators = ["BT", "/F1 12 Tf", "1 0 0 1 72 770 Tm"]
+    first = True
+    for line in content_lines:
+        escaped = _pdf_escape(line)
+        if first:
+            operators.append(f"({escaped}) Tj")
+            first = False
+        else:
+            operators.append("T*")
+            operators.append(f"({escaped}) Tj")
+    operators.append("ET")
+    stream = "\n".join(operators) + "\n"
+    stream_bytes = stream.encode("latin-1", "replace")
+
+    objects: List[bytes] = []
+
+    def add_object(body: bytes) -> int:
+        objects.append(body)
+        return len(objects)
+
+    add_object(b"<< /Type /Catalog /Pages 2 0 R >>")
+    add_object(b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+    add_object(
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] "
+        b"/Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>"
+    )
+    add_object(
+        b"<< /Length %d >>\nstream\n" % len(stream_bytes)
+        + stream_bytes
+        + b"endstream"
+    )
+    add_object(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+
+    buffer = BytesIO()
+    buffer.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for index, body in enumerate(objects, start=1):
+        offsets.append(buffer.tell())
+        buffer.write(f"{index} 0 obj\n".encode("ascii"))
+        buffer.write(body)
+        if not body.endswith(b"\n"):
+            buffer.write(b"\n")
+        buffer.write(b"endobj\n")
+    xref_offset = buffer.tell()
+    buffer.write(f"xref\n0 {len(objects) + 1}\n".encode("ascii"))
+    buffer.write(b"0000000000 65535 f \n")
+    for offset in offsets[1:]:
+        buffer.write(f"{offset:010} 00000 n \n".encode("ascii"))
+    buffer.write(
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n".encode(
+            "ascii"
+        )
+    )
+    return buffer.getvalue()
+
+
 def build_archive(plan: dict) -> bytes:
     """Create the ZIP archive bundling CSV + synthèse + plans."""
+
+    csv_rows = list(_csv_rows(plan))
+    synthese_text = _format_synthese(plan)
+    portmap_text = _format_portmap(plan)
+    vlan_text = _format_vlan_plan(plan)
 
     buffer = BytesIO()
     with ZipFile(buffer, "w", compression=ZIP_DEFLATED) as archive:
         csv_buffer = StringIO()
         writer = csv.writer(csv_buffer)
-        for row in _csv_rows(plan):
+        for row in csv_rows:
             writer.writerow(row)
         archive.writestr("bom.csv", csv_buffer.getvalue())
-        archive.writestr("synthese.txt", _format_synthese(plan))
-        archive.writestr("portmap.txt", _format_portmap(plan))
-        archive.writestr("plan_vlan.txt", _format_vlan_plan(plan))
+        archive.writestr("synthese.txt", synthese_text)
+        archive.writestr("portmap.txt", portmap_text)
+        archive.writestr("plan_vlan.txt", vlan_text)
+        archive.writestr(
+            "bom.pdf",
+            _render_pdf("BOM détaillée", [" | ".join(row) for row in csv_rows]),
+        )
+        archive.writestr(
+            "synthese.pdf",
+            _render_pdf("Synthèse technique", synthese_text.strip().splitlines()),
+        )
+        archive.writestr(
+            "plan_vlan.pdf",
+            _render_pdf("Plan VLAN & Port-map", (portmap_text + "\n" + vlan_text).strip().splitlines()),
+        )
 
     return buffer.getvalue()
 

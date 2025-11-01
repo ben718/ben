@@ -30,13 +30,36 @@ votre dépôt avec `git init`, `git add` puis `git commit`.
 pytest
 ```
 
+## Catalogue dynamique
+
+Les références utilisées par le moteur proviennent du fichier
+`data/catalogue.json`. Chaque entrée précise le SKU, la consommation PoE, le
+prix estimé et les caractéristiques clés exploitées par le moteur de règles.
+
+Pour remplacer le catalogue par une version personnalisée (issue d'un export
+PGSQL, d'un ERP, etc.) :
+
+1. générez un nouveau fichier JSON reprenant la structure fournie ;
+2. positionnez la variable d'environnement
+   `OMADABOM_CATALOGUE_PATH=/chemin/vers/votre/catalogue.json` ;
+3. relancez l'application ou vos tests : le moteur rechargera automatiquement le
+   fichier lors du prochain calcul.
+
+Le helper `set_catalogue_path()` exposé par `src/omadabom_engine` simplifie les
+tests automatisés si vous souhaitez injecter un catalogue temporaire.
+
 ## Fonctionnalités principales
 
 * Calcul serveur fiable : les recommandations matérielles, budgets PoE,
   indicateurs OPEX et plans VLAN sont produits par `src/omadabom_engine.py`.
 * Téléchargement opérationnel : le bouton « Télécharger le ZIP » déclenche
   la génération d'une archive contenant `bom.csv`, `synthese.txt`,
-  `portmap.txt` et `plan_vlan.txt`.
+  `portmap.txt`, `plan_vlan.txt` ainsi que des versions PDF prêtes à
+  partager (`bom.pdf`, `synthese.pdf`, `plan_vlan.pdf`).
+* Catalogue dynamique : la liste des équipements est stockée dans
+  `data/catalogue.json`. Il suffit de mettre à jour ce fichier (ou de
+  définir la variable d'environnement `OMADABOM_CATALOGUE_PATH`) pour que
+  le moteur utilise les nouvelles références, budgets PoE et tarifs.
 * API prête à intégrer : les clients peuvent exploiter `/api/generate`
   (JSON -> JSON) et `/api/download` (JSON -> ZIP) pour alimenter d'autres
   frontends.

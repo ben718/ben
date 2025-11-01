@@ -1,0 +1,43 @@
+{
+  "access_points": [
+    {"id": "eap610", "modele": "TP-Link EAP610", "sku": "EAP610", "poe": 14, "prix": 129, "multi_gig": false},
+    {"id": "eap650", "modele": "TP-Link EAP650", "sku": "EAP650", "poe": 18, "prix": 189, "multi_gig": false},
+    {"id": "eap673", "modele": "TP-Link EAP673", "sku": "EAP673", "poe": 19, "prix": 239, "multi_gig": true},
+    {"id": "eap690", "modele": "TP-Link EAP690E HD", "sku": "EAP690EHD", "poe": 23, "prix": 479, "multi_gig": true},
+    {"id": "eap615", "modele": "TP-Link EAP615-Wall", "sku": "EAP615WALL", "poe": 13, "prix": 139, "multi_gig": false},
+    {"id": "eap610_outdoor", "modele": "TP-Link EAP610-Outdoor", "sku": "EAP610OUT", "poe": 16, "prix": 219, "multi_gig": false}
+  ],
+  "switches": [
+    {"modele": "TL-SG2210MP", "sku": "TLSG2210MP", "ports_total": 10, "ports_poe": 8, "budget": 150, "prix": 229, "ports_2_5g": 0, "ports_10g": 0, "idle_w": 20},
+    {"modele": "TL-SG2428P", "sku": "TLSG2428P", "ports_total": 28, "ports_poe": 24, "budget": 250, "prix": 329, "ports_2_5g": 0, "ports_10g": 0, "idle_w": 32},
+    {"modele": "TL-SG3428MP", "sku": "TLSG3428MP", "ports_total": 28, "ports_poe": 24, "budget": 384, "prix": 549, "ports_2_5g": 0, "ports_10g": 2, "idle_w": 45},
+    {"modele": "TL-SG3452XP", "sku": "TLSG3452XP", "ports_total": 52, "ports_poe": 48, "budget": 720, "prix": 899, "ports_2_5g": 4, "ports_10g": 4, "idle_w": 60}
+  ],
+  "routers": [
+    {"id": "er605", "modele": "ER605", "sku": "ER605", "prix": 119, "conso": 18, "sfp_plus": false},
+    {"id": "er7206", "modele": "ER7206", "sku": "ER7206", "prix": 259, "conso": 22, "sfp_plus": false},
+    {"id": "er8411", "modele": "ER8411", "sku": "ER8411", "prix": 549, "conso": 28, "sfp_plus": true}
+  ],
+  "controllers": [
+    {"id": "oc200", "modele": "OC200", "sku": "OC200", "prix": 129, "conso": 12},
+    {"id": "oc300", "modele": "OC300", "sku": "OC300", "prix": 269, "conso": 18}
+  ],
+  "cameras": [
+    {"id": "dome", "modele": "VIGI C440 (D\u00f4me int\u00e9rieur)", "sku": "VIGIC440", "prix": 159, "poe": 11},
+    {"id": "turret", "modele": "VIGI C240 (Turret int\u00e9rieur)", "sku": "VIGIC240", "prix": 129, "poe": 9},
+    {"id": "interior_bullet", "modele": "VIGI C340 (Bullet int\u00e9rieur)", "sku": "VIGIC340", "prix": 179, "poe": 12},
+    {"id": "exterior", "modele": "VIGI C340 (Bullet ext\u00e9rieur)", "sku": "VIGIC340EXT", "prix": 199, "poe": 14},
+    {"id": "exterior_ai", "modele": "VIGI C340S (Bullet IA)", "sku": "VIGIC340S", "prix": 249, "poe": 16}
+  ],
+  "nvrs": [
+    {"modele": "VIGI NVR1008H", "sku": "VIGINVR1008H", "canaux": 8, "prix": 199, "conso": 18},
+    {"modele": "VIGI NVR1108", "sku": "VIGINVR1108", "canaux": 12, "prix": 249, "conso": 20},
+    {"modele": "VIGI NVR1216", "sku": "VIGINVR1216", "canaux": 16, "prix": 399, "conso": 24}
+  ],
+  "storage": [
+    {"capacite": 2, "prix": 119},
+    {"capacite": 4, "prix": 149},
+    {"capacite": 8, "prix": 229},
+    {"capacite": 16, "prix": 369}
+  ]
+}

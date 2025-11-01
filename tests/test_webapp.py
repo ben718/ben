@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
-from zipfile import ZipFile
 from types import SimpleNamespace
 from typing import Callable, Iterable, List, Tuple
+from zipfile import ZipFile
 from wsgiref.util import setup_testing_defaults
 
 import pytest
@@ -160,7 +160,16 @@ def test_download_api_returns_zip_archive() -> None:
     archive = BytesIO(response.body)
     with ZipFile(archive) as zf:
         names = set(zf.namelist())
-        assert {"bom.csv", "synthese.txt", "portmap.txt", "plan_vlan.txt"}.issubset(names)
+        assert {
+            "bom.csv",
+            "synthese.txt",
+            "portmap.txt",
+            "plan_vlan.txt",
+            "bom.pdf",
+            "synthese.pdf",
+            "plan_vlan.pdf",
+        }.issubset(names)
+        assert zf.read("bom.pdf").startswith(b"%PDF")
 
 
 def test_generate_api_rejects_invalid_surface() -> None:
