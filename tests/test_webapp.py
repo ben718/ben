@@ -41,7 +41,9 @@ def test_homepage_paths_return_success(path: str) -> None:
 
     assert response.status == "200 OK"
     html = response.body.decode("utf-8")
-    assert "Bienvenue sur votre site fonctionnel" in html
+    assert "OmadaBOM – configurez un réseau précis" in html
+    assert "data-step=\"1\"" in html
+    assert "id=\"hardwareList\"" in html
     assert git_snippet in html
     assert GIT_PLACEHOLDER not in html
     assert ("Content-Type", "text/html; charset=utf-8") in response.headers
