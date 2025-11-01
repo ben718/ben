@@ -14,13 +14,17 @@ from typing import Any, Callable, Iterable, List, Tuple
 from wsgiref.simple_server import make_server
 
 if __package__:
-    from .omadabom_engine import build_archive, generate_plan
+    from .omadabom_engine import build_archive, generate_plan, set_catalogue_path
 else:  # pragma: no cover - execution via ``python src/webapp.py``
     import sys
     from pathlib import Path
 
     sys.path.append(str(Path(__file__).resolve().parents[1]))
-    from src.omadabom_engine import build_archive, generate_plan  # type: ignore
+    from src.omadabom_engine import (  # type: ignore
+        build_archive,
+        generate_plan,
+        set_catalogue_path,
+    )
 
 StartResponse = Callable[[str, List[Tuple[str, str]]], None]
 WSGIApplication = Callable[[dict, StartResponse], Iterable[bytes]]
@@ -1500,25 +1504,52 @@ def create_app(
     return application
 
 
-def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
-    """Launch the development server."""
+def serve(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    *,
+    catalogue: str | Path | None = None,
+) -> None:
+    """Launch the development server.
+
+    Parameters
+    ----------
+    host, port:
+        Network binding exposed by the WSGI server.
+    catalogue:
+        Optional path to an alternative catalogue JSON file.  When provided the
+        rule engine will be reconfigured before the server starts so that the
+        interface reflète immédiatement la personnalisation.
+    """
+
+    if catalogue is not None:
+        catalogue_path = Path(catalogue).expanduser()
+        if not catalogue_path.exists():
+            raise FileNotFoundError(
+                f"Catalogue introuvable : {catalogue_path!s}. Vérifiez le chemin fourni."
+            )
+        set_catalogue_path(catalogue_path)
 
     with make_server(host, port, create_app()) as httpd:
         print(f"Serving on http://{host}:{port} – press Ctrl+C to quit")
         httpd.serve_forever()
 
 
-def _parse_args(argv: list[str] | None = None) -> tuple[str, int]:
+def _parse_args(argv: list[str] | None = None) -> tuple[str, int, str | None]:
     parser = ArgumentParser(description="Launch the demonstration web server")
     parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind")
     parser.add_argument("--port", default=8000, type=int, help="Port to listen on")
+    parser.add_argument(
+        "--catalogue",
+        help="Chemin vers un catalogue JSON personnalisé pour alimenter le moteur",
+    )
     args = parser.parse_args(argv)
-    return args.host, args.port
+    return args.host, args.port, args.catalogue
 
 
 def main(argv: list[str] | None = None) -> None:
-    host, port = _parse_args(argv)
-    serve(host, port)
+    host, port, catalogue = _parse_args(argv)
+    serve(host, port, catalogue=catalogue)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution helper

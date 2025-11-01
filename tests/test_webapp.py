@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Callable, Iterable, List, Tuple
 from zipfile import ZipFile
@@ -203,3 +204,42 @@ def test_download_api_rejects_invalid_cctv() -> None:
     assert response.status == "400 Bad Request"
     data = json.loads(response.body.decode("utf-8"))
     assert "caméra" in data["error"].lower()
+
+
+def test_parse_args_supports_catalogue(tmp_path: Path) -> None:
+    catalogue = tmp_path / "custom.json"
+    host, port, catalogue_arg = webapp_module._parse_args(
+        ["--host", "0.0.0.0", "--port", "9001", "--catalogue", str(catalogue)]
+    )
+    assert host == "0.0.0.0"
+    assert port == 9001
+    assert catalogue_arg == str(catalogue)
+
+
+def test_serve_sets_catalogue_override(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    catalogue = tmp_path / "catalogue.json"
+    catalogue.write_text("{}", encoding="utf-8")
+
+    recorded: dict[str, object] = {}
+
+    def fake_set_catalogue_path(path: Path) -> None:
+        recorded["catalogue"] = path
+
+    class DummyServer:
+        def __enter__(self) -> "DummyServer":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:  # pragma: no cover - required signature
+            pass
+
+        def serve_forever(self) -> None:
+            recorded["served"] = True
+
+    monkeypatch.setattr(webapp_module, "set_catalogue_path", fake_set_catalogue_path)
+    monkeypatch.setattr(webapp_module, "create_app", lambda: object())
+    monkeypatch.setattr(webapp_module, "make_server", lambda host, port, app: DummyServer())
+
+    webapp_module.serve("0.0.0.0", 8123, catalogue=str(catalogue))
+
+    assert recorded["catalogue"] == catalogue
+    assert recorded["served"] is True

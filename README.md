@@ -15,6 +15,13 @@ Ce dépôt contient deux éléments principaux :
 python -m webapp --host 0.0.0.0 --port 8000
 ```
 
+Vous pouvez également fournir un catalogue personnalisé pour alimenter le
+moteur :
+
+```bash
+python -m webapp --catalogue /chemin/vers/catalogue.json
+```
+
 Vous pouvez ensuite visiter <http://localhost:8000> pour voir le site et
 utiliser le configurateur. Le moteur Python situé derrière `/api/generate`
 alimente la synthèse affichée à l'écran, et l'endpoint `/api/download`
