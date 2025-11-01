@@ -27,6 +27,7 @@ class AccessPoint:
     poe: int
     prix: int
     multi_gig: bool = False
+    wifi_standard: str = "Wi-Fi 6"
 
 
 @dataclass(frozen=True)
@@ -105,6 +106,7 @@ class Catalogue:
                     poe=int(entry["poe"]),
                     prix=int(entry["prix"]),
                     multi_gig=bool(entry.get("multi_gig", False)),
+                    wifi_standard=str(entry.get("wifi_standard", "Wi-Fi 6")),
                 )
                 for entry in payload["access_points"]
             }
@@ -224,6 +226,10 @@ QOS_LABELS = {
     "navigation": "Navigation Web",
     "streaming": "Streaming vidéo",
     "iot": "IoT & capteurs",
+    "industrie": "Terminaux industriels",
+    "vpn": "VPN site-à-site",
+    "securite": "Sécurité renforcée",
+    "ar_vr": "Expériences AR/VR",
 }
 
 
@@ -247,6 +253,25 @@ def _structure_factor(structure: str | None) -> float:
 
 def _height_factor(height: str | None) -> float:
     return {"standard": 1.0, "elevee": 0.95, "tres": 1.15}.get(height or "", 1.0)
+
+
+def _coverage_factor(target: str | None) -> float:
+    return {"standard": 1.0, "premium": 0.9, "ultra": 0.8}.get(target or "", 1.0)
+
+
+def _interference_factor(interferences: dict | None) -> float:
+    if not isinstance(interferences, dict):
+        return 1.0
+    factor = 1.0
+    if interferences.get("dense_wifi"):
+        factor *= 0.85
+    if interferences.get("machinery"):
+        factor *= 0.88
+    if interferences.get("medical"):
+        factor *= 0.82
+    if interferences.get("outdoor_transition"):
+        factor *= 0.9
+    return factor
 
 
 def _safe_number(value: object, default: float = 0.0) -> float:
@@ -274,6 +299,42 @@ def _validate_payload(payload: dict) -> None:
     if total_surface > MAX_SURFACE_M2:
         raise ValueError("La surface totale dépasse la limite prise en charge (50 000 m²).")
 
+    floor_count = int(_safe_number(payload.get("floors"), 1))
+    if floor_count < 1 or floor_count > 15:
+        raise ValueError("Le nombre d'étages doit être compris entre 1 et 15.")
+
+    coverage = payload.get("coverageTarget")
+    if coverage and coverage not in {"standard", "premium", "ultra"}:
+        raise ValueError("Niveau de performance Wi-Fi inconnu.")
+
+    interferences = payload.get("interferences") or {}
+    if interferences and (
+        not isinstance(interferences, dict)
+        or any(not isinstance(flag, bool) for flag in interferences.values())
+    ):
+        raise ValueError("Format des interférences invalide.")
+
+    custom_services = payload.get("customServices") or []
+    if not isinstance(custom_services, list):
+        raise ValueError("Format des services personnalisés invalide.")
+    for entry in custom_services:
+        if not isinstance(entry, dict):
+            raise ValueError("Service personnalisé invalide.")
+        name = str(entry.get("name", "")).strip()
+        if not name:
+            raise ValueError("Chaque service personnalisé doit avoir un nom.")
+        bandwidth = _safe_number(entry.get("bandwidth"), 0.0)
+        if bandwidth < 0:
+            raise ValueError("La bande passante d'un service personnalisé doit être positive.")
+
+    network = payload.get("network") or {}
+    ssids = _safe_number(network.get("ssids"), 0.0)
+    if ssids and (ssids < 1 or ssids > 16):
+        raise ValueError("Le nombre de SSID doit être compris entre 1 et 16.")
+    guest_peak = _safe_number(network.get("guestPeak"), 0.0)
+    if guest_peak < 0:
+        raise ValueError("Le pic de connexions invité doit être positif.")
+
     cctv = payload.get("cctv") or {}
     if cctv.get("enabled"):
         interior = max(_safe_number(cctv.get("interior")), 0.0)
@@ -294,7 +355,14 @@ def _validate_payload(payload: dict) -> None:
 def _compute_access_points(payload: dict) -> int:
     structure = payload.get("structure")
     height = payload.get("height")
-    base_factor = _structure_factor(structure) * _height_factor(height)
+    coverage_factor = _coverage_factor(payload.get("coverageTarget"))
+    interference_factor = _interference_factor(payload.get("interferences"))
+    base_factor = (
+        _structure_factor(structure)
+        * _height_factor(height)
+        * coverage_factor
+        * interference_factor
+    )
     zones = payload.get("zones") or []
     if not zones:
         zones = [
@@ -315,19 +383,42 @@ def _compute_access_points(payload: dict) -> int:
         ratio = max(35.0, _base_ratio(environment) * base_factor * _density_factor(density))
         total += ceil(surface / ratio)
 
-    return max(total, 1)
+    floor_count = max(int(_safe_number(payload.get("floors"), 1)), 1)
+    floor_factor = 1 + max(floor_count - 1, 0) * 0.12
+
+    return max(ceil(total * floor_factor), 1)
 
 
 def _pick_access_point(payload: dict, ap_count: int, catalogue: Catalogue) -> AccessPoint:
     environment = payload.get("environment")
     density = payload.get("density")
     services = payload.get("services") or {}
+    interferences = payload.get("interferences") or {}
+    coverage = payload.get("coverageTarget")
+    custom_services = payload.get("customServices") or []
+    heavy_custom = any(_safe_number(entry.get("bandwidth"), 0.0) > 200 for entry in custom_services)
+
+    if coverage == "ultra" and "eap773" in catalogue.access_points:
+        return catalogue.access_points["eap773"]
+    if coverage == "premium":
+        preferred = catalogue.access_points.get("eap690") or catalogue.access_points.get("eap673")
+        if preferred:
+            return preferred
+
     if environment == "hotel":
         return catalogue.access_points["eap615"]
     if environment == "exterieur":
         return catalogue.access_points["eap610_outdoor"]
-    if density == "elevee" or services.get("haute_vitesse"):
-        return catalogue.access_points["eap690"]
+    if services.get("visioconf") or services.get("haute_vitesse") or services.get("ar_vr"):
+        return catalogue.access_points.get("eap690") or catalogue.access_points["eap673"]
+    if interferences.get("dense_wifi") or interferences.get("medical"):
+        return catalogue.access_points.get("eap690") or catalogue.access_points["eap673"]
+    if services.get("industrie") or interferences.get("machinery"):
+        return catalogue.access_points.get("eap673") or catalogue.access_points["eap650"]
+    if heavy_custom:
+        return catalogue.access_points.get("eap690") or catalogue.access_points["eap673"]
+    if density == "elevee":
+        return catalogue.access_points.get("eap673") or catalogue.access_points["eap690"]
     if ap_count >= 6:
         return catalogue.access_points["eap673"]
     if density == "faible":
@@ -341,18 +432,37 @@ def _compute_bandwidth(payload: dict) -> dict[str, float]:
     per_user = max(_safe_number(bandwidth.get("mbpsParPoste")), 0.0)
     cameras = max(_safe_number(bandwidth.get("cameras")), 0.0)
     per_camera = max(_safe_number(bandwidth.get("mbpsParCamera")), 0.0)
+    custom_services = payload.get("customServices") or []
+    custom_total = sum(max(_safe_number(entry.get("bandwidth")), 0.0) for entry in custom_services)
+    network = payload.get("network") or {}
+    guest_peak = max(_safe_number(network.get("guestPeak")), 0.0)
+    guest_extra = guest_peak * 2.0  # hypothèse 2 Mbps par invité simultané
     return {
-        "users": users * per_user,
+        "users": users * per_user + guest_extra,
         "video": cameras * per_camera,
+        "custom": custom_total,
     }
 
 
 def _pick_router(payload: dict, total_bandwidth: float, ap: AccessPoint, catalogue: Catalogue) -> Router:
     services = payload.get("services") or {}
-    high_speed = services.get("haute_vitesse") or total_bandwidth > 1000
+    infrastructure = payload.get("infrastructure") or {}
+    coverage = payload.get("coverageTarget")
+
+    if infrastructure.get("fiber"):
+        return catalogue.routers.get("er8411") or catalogue.routers["er7206"]
+
+    high_speed = (
+        services.get("haute_vitesse")
+        or services.get("visioconf")
+        or services.get("ar_vr")
+        or services.get("vpn")
+        or coverage == "ultra"
+        or total_bandwidth > 1000
+    )
     if high_speed:
         key = "er7206" if ap.multi_gig else "er8411"
-        return catalogue.routers[key]
+        return catalogue.routers.get(key) or catalogue.routers["er7206"]
     if total_bandwidth > 600:
         return catalogue.routers["er7206"]
     return catalogue.routers["er605"]
@@ -369,6 +479,7 @@ def _pick_switch(
     poe_budget_required: float,
     min_speed: str,
     catalogue: Catalogue,
+    infrastructure: dict | None,
 ) -> Switch:
     poe_ports = ap_count + camera_count
     uplinks = 1 + (1 if camera_count > 0 else 0)
@@ -387,7 +498,16 @@ def _pick_switch(
         )
     ]
 
-    return (candidates or [catalogue.switches[-1]])[0]
+    if not candidates:
+        return catalogue.switches[-1]
+
+    prefer_compact = not (infrastructure or {}).get("rack", True)
+    if prefer_compact:
+        candidates.sort(key=lambda item: (item.ports_total, item.prix))
+    else:
+        candidates.sort(key=lambda item: (-item.budget, item.prix))
+
+    return candidates[0]
 
 
 def _derive_cameras(payload: dict, catalogue: Catalogue) -> dict:
@@ -487,10 +607,20 @@ def _services_summary(payload: dict) -> List[str]:
         lines.append("VLAN invités isolé + portail captif")
     if services.get("voip"):
         lines.append("QoS prioritaire VoIP")
+    if services.get("visioconf"):
+        lines.append("Optimisation visio 4K et salles de réunion connectées")
     if services.get("iot"):
         lines.append("Segment IoT dédié et ACL restrictives")
     if services.get("haute_vitesse"):
         lines.append("Backbone multi-gigabit recommandé")
+    if services.get("ar_vr"):
+        lines.append("Canal radio stabilisé pour expériences AR/VR")
+    if services.get("industrie"):
+        lines.append("Réseau durci pour scanners et automates industriels")
+    if services.get("securite"):
+        lines.append("Authentification 802.1X et politiques Zero Trust")
+    if services.get("vpn"):
+        lines.append("VPN site-à-site / accès distant sécurisé")
     if security.get("isolation"):
         lines.append("Client isolation activée")
     if security.get("filtrage"):
@@ -503,6 +633,33 @@ def _services_summary(payload: dict) -> List[str]:
     )
     if priorities:
         lines.append(f"Priorités QoS : {priorities}")
+
+    network = payload.get("network") or {}
+    ssids = int(_safe_number(network.get("ssids"), 0))
+    if ssids:
+        lines.append(f"Plan jusqu'à {ssids} SSID distincts")
+    guest_peak = int(_safe_number(network.get("guestPeak"), 0))
+    if guest_peak:
+        lines.append(f"Capacité visiteurs dimensionnée pour {guest_peak} connexions simultanées")
+
+    for entry in payload.get("customServices") or []:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name", "")).strip()
+        if not name:
+            continue
+        bandwidth = _safe_number(entry.get("bandwidth"), 0.0)
+        notes = str(entry.get("notes", "")).strip()
+        descriptor = f"Service personnalisé – {name}"
+        if bandwidth > 0:
+            descriptor += f" ({bandwidth:.0f} Mbps)"
+        if notes:
+            descriptor += f" · {notes}"
+        lines.append(descriptor)
+
+    notes = str(payload.get("notes", "")).strip()
+    if notes:
+        lines.append(f"Notes client : {notes}")
 
     return lines
 
@@ -523,15 +680,32 @@ def generate_plan(payload: dict) -> dict:
     poe_budget_required = ceil(poe_budget_devices * 1.2)
 
     bandwidth = _compute_bandwidth(payload)
-    total_bandwidth = bandwidth["users"] + bandwidth["video"]
+    total_bandwidth = bandwidth["users"] + bandwidth["video"] + bandwidth.get("custom", 0.0)
+    services = payload.get("services") or {}
+    infrastructure = payload.get("infrastructure") or {}
+
     router_entry = _pick_router(payload, total_bandwidth, ap_entry, catalogue)
-    min_speed = "10G" if router_entry.sfp_plus else "2.5G" if (payload.get("services", {}).get("haute_vitesse") or ap_entry.multi_gig) else "1G"
+
+    require_10g = infrastructure.get("fiber") or router_entry.sfp_plus
+    require_multi_gig = (
+        require_10g
+        or ap_entry.multi_gig
+        or services.get("haute_vitesse")
+        or services.get("visioconf")
+        or services.get("ar_vr")
+        or services.get("vpn")
+        or payload.get("coverageTarget") == "ultra"
+        or bandwidth["users"] > 800
+        or bandwidth.get("custom", 0.0) > 500
+    )
+    min_speed = "10G" if require_10g else "2.5G" if require_multi_gig else "1G"
     switch_entry = _pick_switch(
         ap_count,
         camera_count,
         poe_budget_required,
         min_speed,
         catalogue,
+        infrastructure,
     )
     controller_entry = _pick_controller(ap_count, camera_count, catalogue)
     nvr_entry = _pick_nvr(camera_count, catalogue)
@@ -589,7 +763,14 @@ def generate_plan(payload: dict) -> dict:
     for module in modules:
         hardware_lines.append(f"{module['quantite']} × {module['modele']}")
 
+    coverage_label = {
+        "ultra": "Profil ultra-dense",
+        "premium": "Profil premium",
+        "standard": "Profil standard",
+    }.get(payload.get("coverageTarget"), "Profil standard")
+
     metrics_lines = [
+        f"{coverage_label} · {ap_entry.wifi_standard}",
         f"Budget PoE requis : {int(poe_budget_required)} W",
         f"Budget PoE disponible : {switch_entry.budget} W",
         f"Consommation totale estimée : {int(conso_totale)} W",
@@ -609,6 +790,7 @@ def generate_plan(payload: dict) -> dict:
                 "quantite": ap_count,
                 "poe": ap_entry.poe,
                 "prix": ap_entry.prix,
+                "standard": ap_entry.wifi_standard,
             },
             "switch": {
                 "modele": switch_entry.modele,
@@ -654,6 +836,8 @@ def generate_plan(payload: dict) -> dict:
                 "opex_euros": opex_euros,
                 "bande_passante": total_bandwidth,
                 "prix_total": price_total,
+                "profil": coverage_label,
+                "wifi_standard": ap_entry.wifi_standard,
             },
         },
     }
@@ -667,7 +851,7 @@ def _csv_rows(plan: dict) -> Iterable[List[str]]:
         details["aps"]["modele"],
         details["aps"]["sku"],
         str(details["aps"]["quantite"]),
-        f"PoE {details['aps']['poe']} W",
+        f"PoE {details['aps']['poe']} W · {details['aps']['standard']}",
     ]
     yield [
         "Switch",
@@ -718,6 +902,7 @@ def _format_synthese(plan: dict) -> str:
     lines = [
         "Synthèse technique",
         "===================",
+        f"Profil radio : {synthese['profil']} · {synthese['wifi_standard']}",
         f"Budget PoE requis : {synthese['poe_requis']} W",
         f"Budget PoE disponible : {synthese['poe_disponible']} W",
         f"Consommation totale estimée : {synthese['conso_totale']:.0f} W",

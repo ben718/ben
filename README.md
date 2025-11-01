@@ -97,6 +97,10 @@ tests automatisés si vous souhaitez injecter un catalogue temporaire.
   `data/catalogue.json`. Il suffit de mettre à jour ce fichier (ou de
   définir la variable d'environnement `OMADABOM_CATALOGUE_PATH`) pour que
   le moteur utilise les nouvelles références, budgets PoE et tarifs.
+* Questionnaire professionnel : chaque étape propose des volets avancés
+  (niveau Wi-Fi 6/6E/7, étages, contraintes radio, infrastructure existante,
+  profils QoS, SSID cibles, services métiers personnalisés) afin d'affiner
+  la recommandation en fonction des usages TP-Link Omada identifiés.
 * API prête à intégrer : les clients peuvent exploiter `/api/generate`
   (JSON -> JSON) et `/api/download` (JSON -> ZIP) pour alimenter d'autres
   frontends.

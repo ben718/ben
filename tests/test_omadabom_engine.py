@@ -77,6 +77,15 @@ def test_generate_plan_reads_external_catalogue(tmp_path: Path) -> None:
                 "multi_gig": True,
             },
             {
+                "id": "eap773",
+                "modele": "Wi-Fi 7 AP",
+                "sku": "WIFI7",
+                "poe": 26,
+                "prix": 520,
+                "multi_gig": True,
+                "wifi_standard": "Wi-Fi 7",
+            },
+            {
                 "id": "eap615",
                 "modele": "Hotel AP",
                 "sku": "HOTEL",
@@ -149,3 +158,40 @@ def test_generate_plan_reads_external_catalogue(tmp_path: Path) -> None:
 
     assert plan["details"]["aps"]["modele"] == "Custom AP"
     assert plan["details"]["switch"]["modele"] == "Custom Switch"
+
+
+def test_generate_plan_ultra_profile_includes_wifi7() -> None:
+    payload = {
+        "surface": 600,
+        "environment": "bureau",
+        "density": "elevee",
+        "coverageTarget": "ultra",
+        "floors": 2,
+        "services": {
+            "invites": True,
+            "voip": True,
+            "iot": True,
+            "haute_vitesse": True,
+            "visioconf": True,
+            "ar_vr": True,
+            "industrie": False,
+            "securite": True,
+            "vpn": True,
+        },
+        "qosOrder": ["voip", "visioconference", "navigation"],
+        "security": {"isolation": True, "filtrage": True, "portail": False},
+        "bandwidth": {"postes": 60, "mbpsParPoste": 75, "cameras": 4, "mbpsParCamera": 6},
+        "network": {"ssids": 5, "guestPeak": 120},
+        "interferences": {"dense_wifi": True, "machinery": False, "medical": False, "outdoor_transition": False},
+        "infrastructure": {"poe": True, "rack": True, "fiber": True},
+        "customServices": [
+            {"name": "CAO 3D", "bandwidth": 320, "notes": "Ateliers design"},
+        ],
+        "cctv": {"enabled": False},
+    }
+
+    plan = generate_plan(payload)
+
+    assert plan["details"]["aps"]["standard"] == "Wi-Fi 7"
+    assert plan["metrics"][0].startswith("Profil ultra-dense")
+    assert any("Service personnalisé" in line for line in plan["services"])

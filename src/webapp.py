@@ -304,12 +304,48 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       .field input[type='number'],
       .field input[type='text'],
+      .field textarea,
       .field select {
         border: 1px solid var(--border);
         border-radius: 14px;
         padding: 0.85rem 1rem;
         font-size: 1rem;
         background: rgba(255, 255, 255, 0.9);
+        resize: vertical;
+        min-height: 3.2rem;
+      }
+
+      .field textarea {
+        min-height: 120px;
+        line-height: 1.5;
+      }
+
+      .custom-service-list {
+        list-style: none;
+        padding: 0;
+        margin: 1rem 0 0 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+
+      .custom-service-list li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        border-radius: 14px;
+        border: 1px solid var(--border);
+        background: rgba(37, 99, 235, 0.05);
+        font-size: 0.95rem;
+      }
+
+      .custom-service-list button {
+        border: none;
+        background: none;
+        color: #dc2626;
+        font-weight: 600;
+        cursor: pointer;
       }
 
       .inline-options {
@@ -575,6 +611,24 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         </div>
 
         <div class=\"field\">
+          <label>Niveau de performance Wi-Fi ciblé</label>
+          <div class=\"inline-options\">
+            <label>
+              <input type=\"radio\" name=\"coverageTarget\" value=\"standard\" checked />
+              <span>Standard (Wi-Fi 6)</span>
+            </label>
+            <label>
+              <input type=\"radio\" name=\"coverageTarget\" value=\"premium\" />
+              <span>Premium (Wi-Fi 6E multi-gig)</span>
+            </label>
+            <label>
+              <input type=\"radio\" name=\"coverageTarget\" value=\"ultra\" />
+              <span>Ultra (Wi-Fi 7 &amp; densité extrême)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class=\"field\">
           <label>Type d'environnement principal</label>
           <div class=\"grid two\">
             <label class=\"option-card\">
@@ -626,6 +680,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
               <span>Élevée</span>
             </label>
           </div>
+        </div>
+
+        <div class=\"field\">
+          <label for=\"floorCount\">Nombre d'étages à couvrir</label>
+          <input id=\"floorCount\" type=\"number\" min=\"1\" max=\"15\" value=\"1\" />
         </div>
 
         <button class=\"toggle-advanced\" type=\"button\" data-advanced-target=\"advanced-step1\">Afficher les options avancées</button>
@@ -699,6 +758,51 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <button type=\"button\" id=\"addZoneButton\" class=\"toggle-advanced\">+ Ajouter cette zone</button>
             <ul class=\"zones-list\" id=\"zoneList\"></ul>
           </div>
+
+          <div class=\"field\">
+            <label>Contraintes radio identifiées</label>
+            <div class=\"inline-options\">
+              <label>
+                <input type=\"checkbox\" data-interference=\"dense_wifi\" />
+                <span>Beaucoup de Wi-Fi voisins</span>
+              </label>
+              <label>
+                <input type=\"checkbox\" data-interference=\"machinery\" />
+                <span>Machines / structures métalliques</span>
+              </label>
+              <label>
+                <input type=\"checkbox\" data-interference=\"medical\" />
+                <span>Environnement médical / capteurs sensibles</span>
+              </label>
+              <label>
+                <input type=\"checkbox\" data-interference=\"outdoor_transition\" />
+                <span>Mix intérieur / extérieur</span>
+              </label>
+            </div>
+          </div>
+
+          <div class=\"field\">
+            <label>Infrastructure actuelle</label>
+            <div class=\"inline-options\">
+              <label>
+                <input type=\"checkbox\" data-infrastructure=\"poe\" checked />
+                <span>Câblage PoE existant</span>
+              </label>
+              <label>
+                <input type=\"checkbox\" data-infrastructure=\"rack\" checked />
+                <span>Baie de brassage / rack 19\"</span>
+              </label>
+              <label>
+                <input type=\"checkbox\" data-infrastructure=\"fiber\" />
+                <span>Backbone fibre à raccorder</span>
+              </label>
+            </div>
+          </div>
+
+          <div class=\"field\">
+            <label>Notes ou exigences spécifiques</label>
+            <textarea id=\"projectNotes\" placeholder=\"Ex : respecter un SLA de 50 ms, prévoir des zones silencieuses, etc.\"></textarea>
+          </div>
         </div>
       </section>
 
@@ -729,6 +833,36 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             <div class=\"card-bg\"></div>
             <span>Connexion &gt; 1 Gbit/s</span>
             <small>Optimise pour la fibre multi-gigabit et le Wi-Fi 6/7.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"visioconf\" />
+            <div class=\"card-bg\"></div>
+            <span>Visioconférence 4K</span>
+            <small>Priorise Teams, Zoom Rooms et systèmes hybrides.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"ar_vr\" />
+            <div class=\"card-bg\"></div>
+            <span>Expériences AR/VR</span>
+            <small>Débit stable pour showroom immersif et formation.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"industrie\" />
+            <div class=\"card-bg\"></div>
+            <span>Terminaux industriels</span>
+            <small>Prépare scanners, AGV et tablettes en environnements exigeants.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"securite\" />
+            <div class=\"card-bg\"></div>
+            <span>Conformité &amp; sécurité avancée</span>
+            <small>802.1X, politiques Zero Trust, intégration SIEM.</small>
+          </label>
+          <label class=\"option-card\">
+            <input type=\"checkbox\" data-service=\"vpn\" />
+            <div class=\"card-bg\"></div>
+            <span>VPN site-à-site / télétravail</span>
+            <small>Dimensionne l'edge pour les accès chiffrés.</small>
           </label>
         </div>
 
@@ -778,6 +912,37 @@ HTML_TEMPLATE = """<!DOCTYPE html>
               <label for=\"bandwidthPerCamera\">Débit par flux (Mbps)</label>
               <input type=\"number\" id=\"bandwidthPerCamera\" min=\"0\" value=\"4\" />
             </div>
+          </div>
+          <div class=\"grid two\">
+            <div class=\"field\">
+              <label for=\"ssidCount\">Nombre de SSID souhaités</label>
+              <input type=\"number\" id=\"ssidCount\" min=\"1\" max=\"16\" value=\"3\" />
+            </div>
+            <div class=\"field\">
+              <label for=\"guestPeak\">Pic de connexions invité simultanées</label>
+              <input type=\"number\" id=\"guestPeak\" min=\"0\" value=\"60\" />
+            </div>
+          </div>
+          <div class=\"field\">
+            <label>Services métiers personnalisés</label>
+            <div class=\"grid two\">
+              <div class=\"field\">
+                <label for=\"customServiceName\">Nom du service</label>
+                <input type=\"text\" id=\"customServiceName\" placeholder=\"Ex : Production MES\" />
+              </div>
+              <div class=\"field\">
+                <label for=\"customServiceBandwidth\">Bande passante dédiée (Mbps)</label>
+                <input type=\"number\" id=\"customServiceBandwidth\" min=\"0\" value=\"150\" />
+              </div>
+              <div class=\"field\">
+                <label for=\"customServiceNotes\">Contraintes spécifiques</label>
+                <input type=\"text\" id=\"customServiceNotes\" placeholder=\"Disponibilité 24/7, latence &lt; 30 ms…\" />
+              </div>
+              <div class=\"field\" style=\"display:flex;align-items:flex-end;\">
+                <button type=\"button\" id=\"addCustomService\" class=\"toggle-advanced\">+ Ajouter le service</button>
+              </div>
+            </div>
+            <ul class=\"custom-service-list\" id=\"customServiceList\"></ul>
           </div>
         </div>
       </section>
@@ -937,13 +1102,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         surface: 300,
         environment: 'bureau',
         density: 'moyenne',
+        coverageTarget: 'standard',
+        floors: 1,
         structure: 'cloisons',
         height: 'standard',
         zones: [],
-        services: { invites: true, voip: false, iot: false, haute_vitesse: false },
+        interferences: { dense_wifi: false, machinery: false, medical: false, outdoor_transition: false },
+        infrastructure: { poe: true, rack: true, fiber: false },
+        notes: '',
+        services: {
+          invites: true,
+          voip: false,
+          iot: false,
+          haute_vitesse: false,
+          visioconf: false,
+          ar_vr: false,
+          industrie: false,
+          securite: false,
+          vpn: false,
+        },
         qosOrder: ['voip', 'visioconference', 'navigation', 'streaming', 'iot'],
         security: { isolation: true, filtrage: false, portail: false },
         bandwidth: { postes: 25, mbpsParPoste: 50, cameras: 0, mbpsParCamera: 4 },
+        network: { ssids: 3, guestPeak: 60 },
+        customServices: [],
         cctv: {
           enabled: false,
           interior: 4,
@@ -1035,6 +1217,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         });
       });
 
+      document.querySelectorAll('input[name="coverageTarget"]').forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.checked) {
+            state.coverageTarget = input.value;
+            notifyStateChange();
+          }
+        });
+      });
+
       document.querySelectorAll('input[name="density"]').forEach((input) => {
         input.addEventListener('change', () => {
           if (input.checked) {
@@ -1042,6 +1233,12 @@ HTML_TEMPLATE = """<!DOCTYPE html>
             notifyStateChange();
           }
         });
+      });
+
+      document.getElementById('floorCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.floors = Number.isFinite(value) && value > 0 ? value : 1;
+        notifyStateChange();
       });
 
       document.querySelectorAll('input[name="structure"]').forEach((input) => {
@@ -1093,6 +1290,25 @@ HTML_TEMPLATE = """<!DOCTYPE html>
           list.appendChild(li);
         });
       }
+
+      document.querySelectorAll('[data-interference]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          state.interferences[checkbox.dataset.interference] = checkbox.checked;
+          notifyStateChange();
+        });
+      });
+
+      document.querySelectorAll('[data-infrastructure]').forEach((checkbox) => {
+        checkbox.addEventListener('change', () => {
+          state.infrastructure[checkbox.dataset.infrastructure] = checkbox.checked;
+          notifyStateChange();
+        });
+      });
+
+      document.getElementById('projectNotes').addEventListener('input', (event) => {
+        state.notes = event.target.value.trim();
+        notifyStateChange();
+      });
 
       document.querySelectorAll('[data-service]').forEach((checkbox) => {
         checkbox.addEventListener('change', () => {
@@ -1183,6 +1399,68 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       document.getElementById('bandwidthPerCamera').addEventListener('input', (event) => {
         const value = Number(event.target.value);
         state.bandwidth.mbpsParCamera = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      document.getElementById('ssidCount').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.network.ssids = Number.isFinite(value) && value >= 1 ? value : 1;
+        notifyStateChange();
+      });
+
+      document.getElementById('guestPeak').addEventListener('input', (event) => {
+        const value = Number(event.target.value);
+        state.network.guestPeak = Number.isFinite(value) && value >= 0 ? value : 0;
+        notifyStateChange();
+      });
+
+      function renderCustomServices() {
+        const list = document.getElementById('customServiceList');
+        list.innerHTML = '';
+        if (!state.customServices.length) {
+          const empty = document.createElement('li');
+          empty.textContent = 'Ajoutez vos scénarios métiers pour enrichir la recommandation.';
+          empty.style.justifyContent = 'center';
+          empty.style.fontStyle = 'italic';
+          list.appendChild(empty);
+          return;
+        }
+        state.customServices.forEach((service) => {
+          const li = document.createElement('li');
+          const description = document.createElement('span');
+          const bandwidthLabel = service.bandwidth ? ` — ${service.bandwidth} Mbps` : '';
+          const notesLabel = service.notes ? ` · ${service.notes}` : '';
+          description.innerHTML = `<strong>${service.name}</strong>${bandwidthLabel}${notesLabel}`;
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.textContent = 'Retirer';
+          remove.addEventListener('click', () => {
+            state.customServices = state.customServices.filter((item) => item.id !== service.id);
+            renderCustomServices();
+            notifyStateChange();
+          });
+          li.appendChild(description);
+          li.appendChild(remove);
+          list.appendChild(li);
+        });
+      }
+
+      document.getElementById('addCustomService').addEventListener('click', () => {
+        const nameInput = document.getElementById('customServiceName');
+        const bandwidthInput = document.getElementById('customServiceBandwidth');
+        const notesInput = document.getElementById('customServiceNotes');
+        const name = nameInput.value.trim();
+        const bandwidthValue = Number(bandwidthInput.value);
+        const bandwidth = Number.isFinite(bandwidthValue) && bandwidthValue >= 0 ? bandwidthValue : 0;
+        const notes = notesInput.value.trim();
+        if (!name) {
+          alert('Veuillez indiquer un nom de service.');
+          return;
+        }
+        state.customServices.push({ id: crypto.randomUUID(), name, bandwidth, notes });
+        nameInput.value = '';
+        notesInput.value = '';
+        renderCustomServices();
         notifyStateChange();
       });
 
@@ -1298,8 +1576,28 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       function serializeState() {
         return {
-          ...state,
+          surface: state.surface,
+          environment: state.environment,
+          density: state.density,
+          coverageTarget: state.coverageTarget,
+          floors: state.floors,
+          structure: state.structure,
+          height: state.height,
+          notes: state.notes,
           zones: state.zones.map(({ name, surface, environment, density }) => ({ name, surface, environment, density })),
+          services: { ...state.services },
+          qosOrder: [...state.qosOrder],
+          security: { ...state.security },
+          bandwidth: { ...state.bandwidth },
+          network: { ...state.network },
+          interferences: { ...state.interferences },
+          infrastructure: { ...state.infrastructure },
+          customServices: state.customServices.map(({ name, bandwidth, notes }) => ({ name, bandwidth, notes })),
+          cctv: {
+            ...state.cctv,
+            interiorTypes: { ...state.cctv.interiorTypes },
+            exteriorTypes: { ...state.cctv.exteriorTypes },
+          },
         };
       }
 
@@ -1402,6 +1700,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 
       renderZones();
       renderQosList();
+      renderCustomServices();
       updateProgress();
 
     </script>

@@ -1,9 +1,10 @@
 {
   "access_points": [
-    {"id": "eap610", "modele": "TP-Link EAP610", "sku": "EAP610", "poe": 14, "prix": 129, "multi_gig": false},
-    {"id": "eap650", "modele": "TP-Link EAP650", "sku": "EAP650", "poe": 18, "prix": 189, "multi_gig": false},
-    {"id": "eap673", "modele": "TP-Link EAP673", "sku": "EAP673", "poe": 19, "prix": 239, "multi_gig": true},
-    {"id": "eap690", "modele": "TP-Link EAP690E HD", "sku": "EAP690EHD", "poe": 23, "prix": 479, "multi_gig": true},
+    {"id": "eap610", "modele": "TP-Link EAP610", "sku": "EAP610", "poe": 14, "prix": 129, "multi_gig": false, "wifi_standard": "Wi-Fi 6"},
+    {"id": "eap650", "modele": "TP-Link EAP650", "sku": "EAP650", "poe": 18, "prix": 189, "multi_gig": false, "wifi_standard": "Wi-Fi 6"},
+    {"id": "eap673", "modele": "TP-Link EAP673", "sku": "EAP673", "poe": 19, "prix": 239, "multi_gig": true, "wifi_standard": "Wi-Fi 6E"},
+    {"id": "eap690", "modele": "TP-Link EAP690E HD", "sku": "EAP690EHD", "poe": 23, "prix": 479, "multi_gig": true, "wifi_standard": "Wi-Fi 6E"},
+    {"id": "eap773", "modele": "TP-Link EAP773 (Wi-Fi 7)", "sku": "EAP773", "poe": 26, "prix": 629, "multi_gig": true, "wifi_standard": "Wi-Fi 7"},
     {"id": "eap615", "modele": "TP-Link EAP615-Wall", "sku": "EAP615WALL", "poe": 13, "prix": 139, "multi_gig": false},
     {"id": "eap610_outdoor", "modele": "TP-Link EAP610-Outdoor", "sku": "EAP610OUT", "poe": 16, "prix": 219, "multi_gig": false}
   ],
